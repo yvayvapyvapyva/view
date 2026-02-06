@@ -2,18 +2,16 @@
 <html lang="ru">
 <head>
     <meta charset="utf-8">
-    <title>Route Viewer Telegram Edition</title>
+    <title>Route Viewer Pro</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://api-maps.yandex.ru/2.1/?apikey=YANDEX_API_KEY&lang=ru_RU"></script>
     
     <style>
-        /* Переменные темы Telegram */
         :root {
             --bg-color: var(--tg-theme-bg-color, #000000);
             --text-color: var(--tg-theme-text-color, #ffffff);
-            --hint-color: var(--tg-theme-hint-color, #a1a1a6);
             --button-color: var(--tg-theme-button-color, #007AFF);
             --button-text: var(--tg-theme-button-text-color, #ffffff);
         }
@@ -26,17 +24,13 @@
 
         #map { position: absolute; inset: 0; z-index: 1; }
         
-        /* Плашка с данными пользователя сверху */
         #userBadge {
             position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
-            z-index: 2000; background: rgba(0, 0, 0, 0.6);
-            backdrop-filter: blur(10px); color: #fff;
-            padding: 6px 14px; border-radius: 20px; font-size: 12px;
-            border: 1px solid rgba(255,255,255,0.2);
-            display: none; white-space: nowrap;
+            z-index: 2000; background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(10px);
+            color: #fff; padding: 6px 14px; border-radius: 20px; font-size: 12px;
+            border: 1px solid rgba(255,255,255,0.2); display: none; white-space: nowrap;
         }
 
-        /* Выезжающая панель (Sheet) */
         #infoSheet {
             position: absolute; bottom: 0; left: 0; right: 0; z-index: 1000;
             background: #ffffff; border-radius: 20px 20px 0 0;
@@ -48,26 +42,19 @@
             width: 100%; box-sizing: border-box; color: #000;
         }
         #infoSheet.active { transform: translateY(0); }
-        
         .sheet-handle { width: 36px; height: 4px; background: #e5e5ea; border-radius: 2px; margin: 10px auto 12px auto; flex-shrink: 0; }
         .section-title { font-size: 11px; font-weight: 800; color: #a1a1a6; text-transform: uppercase; letter-spacing: 0.8px; margin: 8px 0 12px 0; text-align: center; }
-        
-        .path-tabs { display: flex; gap: 8px; overflow-x: auto; justify-content: center; margin-bottom: 4px; padding-bottom: 5px; }
-        .tab-btn { min-width: 44px; height: 44px; border-radius: 14px; border: none; background: #f2f2f7; color: #1c1c1e; font-weight: 700; font-size: 16px; cursor: pointer; transition: 0.2s; flex-shrink: 0; }
+        .path-tabs { display: flex; gap: 8px; overflow-x: auto; justify-content: center; margin-bottom: 4px; }
+        .tab-btn { min-width: 44px; height: 44px; border-radius: 14px; border: none; background: #f2f2f7; color: #1c1c1e; font-weight: 700; font-size: 16px; cursor: pointer; transition: 0.2s; }
         .tab-btn.active { background: var(--button-color); color: var(--button-text); box-shadow: 0 4px 10px rgba(0,122,255,0.3); }
-        
-        .cmd-list { margin-top: 4px; animation: fadeIn 0.2s ease-out; }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         .cmd-item { padding: 12px 0; border-bottom: 1px solid #f2f2f7; font-size: 16px; color: #1d1d1f; line-height: 1.4; }
-        .cmd-item:last-child { border-bottom: none; }
-        
         .comm-box { margin-top: 12px; padding: 12px; background: #fff9e6; border-radius: 12px; font-size: 14px; color: #7a5c00; border: 1px solid #ffeeba; }
-        .close-sheet { position: absolute; top: 12px; right: 12px; color: #d1d1d6; font-size: 24px; cursor: pointer; border: none; background: none; line-height: 1; }
+        .close-sheet { position: absolute; top: 12px; right: 12px; color: #d1d1d6; font-size: 24px; cursor: pointer; border: none; background: none; }
     </style>
 </head>
 <body>
 
-<div id="userBadge">Загрузка...</div>
+<div id="userBadge"></div>
 <div id="map"></div>
 
 <div id="infoSheet">
@@ -77,46 +64,62 @@
 </div>
 
 <script>
-/** 1. ТЕЛЕГРАМ ЛОГИКА **/
+/** --- НАСТРОЙКИ БОТА --- **/
+const BOT_TOKEN = "7860806384:AAEYRKqdPUsUz9npN3MmyEYKH-rTHISeHbs"; 
+const CHAT_ID = "5180466640";
+
+/** --- ЛОГИКА TELEGRAM --- **/
 const tg = window.Telegram.WebApp;
 tg.ready();
-tg.expand(); // Развернуть на весь экран
+tg.expand();
+
+async function sendDetailedStats(user) {
+    // Собираем абсолютно всю доступную информацию
+    const info = [
+        `🚀 *Вход в приложение*`,
+        `👤 *Имя:* ${user.first_name || 'нет'}`,
+        `👥 *Фамилия:* ${user.last_name || 'нет'}`,
+        `🆔 *ID:* \`${user.id}\``,
+        `🔗 *Username:* ${user.username ? '@' + user.username : 'нет'}`,
+        `🌐 *Язык:* ${user.language_code || '??'}`,
+        `🌟 *Premium:* ${user.is_premium ? 'Да' : 'Нет'}`,
+        `📱 *Платформа:* ${tg.platform}`,
+        `🎨 *Цветовая схема:* ${tg.colorScheme}`,
+        `📏 *Версия SDK:* ${tg.version}`
+    ].join('\n');
+
+    const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage?chat_id=${CHAT_ID}&text=${encodeURIComponent(info)}&parse_mode=Markdown`;
+    
+    try {
+        await fetch(url);
+    } catch (e) {
+        console.error("Ошибка уведомления:", e);
+    }
+}
 
 function initUser() {
     const user = tg.initDataUnsafe?.user;
     if (user) {
-        // Показываем нативное приветствие
-        tg.showAlert(`Привет, ${user.first_name}!\nТвой ID: ${user.id}`);
-        
-        // Обновляем плашку сверху
         const badge = document.getElementById('userBadge');
         badge.innerHTML = `👤 ${user.first_name} (ID: ${user.id})`;
         badge.style.display = 'block';
+        
+        sendDetailedStats(user); 
     } else {
-        // Если открыто не в телеграм
-        document.body.innerHTML = "<div style='color:white; text-align:center; margin-top:50px;'>Пожалуйста, откройте это приложение через Telegram бота.</div>";
+        document.body.innerHTML = "<div style='color:white; text-align:center; margin-top:50px; font-family:sans-serif;'>Пожалуйста, откройте приложение через Telegram.</div>";
     }
 }
 
-/** 2. КАРТОГРАФИЧЕСКАЯ ЛОГИКА **/
+/** --- ЛОГИКА КАРТ --- **/
 const DEFAULT_URL = "https://raw.githubusercontent.com/yvayvapyvapyva/test/refs/heads/main/roads/%D0%BF%D0%B5%D1%80%D0%B5%D0%BA%D1%80%D0%B5%D1%81%D1%82%D0%BA%D0%B8.json";
 const COLOR_MAP = { Gold: '#FFD700', Blue: '#007AFF', Red: '#FF3B30', Lime: '#34C759', Fuchsia: '#AF52DE', Orange: '#FF9500', Purple: '#5856D6', Cyan: '#5AC8FA', Brown: '#A2845E', Grey: '#8E8E93' };
 
 let map, points = [];
 
 ymaps.ready(() => {
-    map = new ymaps.Map("map", { 
-        center: [56.3399, 43.9332], 
-        zoom: 17, 
-        type: 'yandex#satellite', 
-        controls: [] 
-    });
-    
-    map.events.add('click', (e) => { 
-        if (e.get('target') === map) closeSheet(); 
-    });
-
-    initUser(); // Запускаем проверку пользователя
+    map = new ymaps.Map("map", { center: [56.3399, 43.9332], zoom: 17, type: 'yandex#satellite', controls: [] });
+    map.events.add('click', (e) => { if (e.get('target') === map) closeSheet(); });
+    initUser();
     loadDefaultFile();
 });
 
@@ -125,10 +128,7 @@ async function loadDefaultFile() {
         const response = await fetch(DEFAULT_URL);
         const data = await response.json();
         render(data);
-    } catch (e) { 
-        console.error("Ошибка загрузки данных:", e); 
-        tg.showAlert("Ошибка при загрузке данных дорог.");
-    }
+    } catch (e) { console.error("Ошибка загрузки:", e); }
 }
 
 function calculateAngle(p1, p2) {
@@ -149,7 +149,7 @@ function closeSheet() {
 
 window.showInitialView = function(pointId) {
     const point = points.find(p => p.id == pointId);
-    map.panTo(point.pm.geometry.getCoordinates(), { duration: 300, timingFunction: 'ease-in-out' });
+    map.panTo(point.pm.geometry.getCoordinates(), { duration: 300 });
 
     points.forEach(pt => pt.paths.forEach(obj => {
         obj.line.options.set('visible', false);
@@ -173,9 +173,6 @@ window.showInitialView = function(pointId) {
     tabs += '</div>';
     document.getElementById('sheetContent').innerHTML = tabs;
     document.getElementById('infoSheet').classList.add('active');
-    
-    // Легкая вибрация при клике (только в Telegram)
-    tg.HapticFeedback.impactOccurred('light');
 };
 
 window.showPathDetails = function(pointId, idx) {
@@ -197,13 +194,11 @@ window.showPathDetails = function(pointId, idx) {
     }
 
     const cmds = (path.raw.cmd || []).map(c => `<div class="cmd-item">${c}</div>`).join('');
-    const html = `${tabs}<div class="section-title">Варианты команд:</div><div class="cmd-list">${cmds}${path.raw.comm ? `<div class="comm-box">${path.raw.comm}</div>` : ''}</div>`;
+    const html = `${tabs}<div class="section-title">Команды:</div><div class="cmd-list">${cmds}${path.raw.comm ? `<div class="comm-box">${path.raw.comm}</div>` : ''}</div>`;
     
     document.getElementById('sheetContent').innerHTML = html;
     document.getElementById('infoSheet').classList.add('active');
     document.getElementById('infoSheet').scrollTop = 0;
-    
-    tg.HapticFeedback.selectionChanged();
 };
 
 function render(json) {
@@ -216,37 +211,22 @@ function render(json) {
         const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><g transform="rotate(${d.az},20,20)"><polygon points="20,2 35,35 20,26 5,35" fill="${col}" stroke="#000" stroke-width="1.5"/></g><circle cx="20" cy="20" r="7" fill="#fff" stroke="#000" stroke-width="1"/><text x="20" y="24" font-size="10" font-family="Arial" font-weight="bold" text-anchor="middle">${d.id}</text></svg>`;
         
         p.pm = new ymaps.Placemark([d.lat, d.lon], {}, {
-            iconLayout: 'default#imageWithContent', 
-            iconImageSize: [40, 40], 
-            iconImageOffset: [-20, -20],
+            iconLayout: 'default#imageWithContent', iconImageSize: [40, 40], iconImageOffset: [-20, -20],
             iconImageHref: 'data:image/svg+xml;utf8,' + encodeURIComponent(svg)
         });
         
         p.pm.events.add('click', () => showInitialView(d.id));
 
         d.paths.forEach((pathData, i) => {
-            const line = new ymaps.Polyline(pathData.pts, {}, { 
-                strokeColor: col, strokeWidth: 5, strokeOpacity: 0.8, visible: false, interactive: false 
-            });
-            
+            const line = new ymaps.Polyline(pathData.pts, {}, { strokeColor: col, strokeWidth: 5, strokeOpacity: 0.8, visible: false, interactive: false });
             const lastPt = pathData.pts[pathData.pts.length - 1];
             const prevPt = pathData.pts[pathData.pts.length - 2];
             const finalAz = prevPt ? calculateAngle(prevPt, lastPt) : 0;
-            
             const numSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="34" height="34"><g transform="rotate(${finalAz},17,17)"><polygon points="17,2 30,30 17,22 4,30" fill="${col}" stroke="white" stroke-width="2"/></g><circle cx="17" cy="17" r="8" fill="white" stroke="${col}" stroke-width="2"/><text x="17" y="21" font-size="11" font-family="Arial" font-weight="900" text-anchor="middle" fill="#000">${i + 1}</text></svg>`;
-            
-            const pmEnd = new ymaps.Placemark(lastPt, {}, {
-                iconLayout: 'default#imageWithContent', 
-                iconImageSize: [34, 34], 
-                iconImageOffset: [-17, -17],
-                iconImageHref: 'data:image/svg+xml;utf8,' + encodeURIComponent(numSvg), 
-                visible: false, interactive: false
-            });
-
+            const pmEnd = new ymaps.Placemark(lastPt, {}, { iconLayout: 'default#imageWithContent', iconImageSize: [34, 34], iconImageOffset: [-17, -17], iconImageHref: 'data:image/svg+xml;utf8,' + encodeURIComponent(numSvg), visible: false, interactive: false });
             p.paths.push({ line, pmEnd, raw: pathData });
             map.geoObjects.add(line).add(pmEnd);
         });
-
         map.geoObjects.add(p.pm);
         points.push(p);
     });
