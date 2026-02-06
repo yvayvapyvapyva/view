@@ -9,7 +9,6 @@
         body, html { margin: 0; height: 100%; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif; overflow: hidden; background: #000; }
         #map { position: absolute; inset: 0; }
         
-        /* Кнопка настроек */
         #togglePanel { 
             position: absolute; top: 15px; right: 15px; z-index: 101; 
             width: 44px; height: 44px; border-radius: 12px; background: #007AFF; 
@@ -17,7 +16,6 @@
             box-shadow: 0 4px 12px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center;
         }
 
-        /* Боковая панель настроек */
         #settingsPanel { 
             position: absolute; top: 70px; right: 15px; width: 260px; z-index: 100;
             background: rgba(255,255,255,0.9); padding: 20px; border-radius: 20px;
@@ -27,7 +25,6 @@
         #settingsPanel.hidden { transform: translateX(320px); opacity: 0; }
         input, select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 10px; font-size: 14px; margin-bottom: 10px; outline: none; box-sizing: border-box;}
 
-        /* НИЖНЯЯ ПАНЕЛЬ (Bottom Sheet) */
         #infoSheet {
             position: absolute; bottom: 0; left: 0; right: 0; z-index: 1000;
             background: #ffffff; border-radius: 24px 24px 0 0;
@@ -44,6 +41,12 @@
             margin: -10px auto 20px auto; flex-shrink: 0;
         }
 
+        .section-title {
+            font-size: 13px; font-weight: 700; color: #8e8e93; 
+            text-transform: uppercase; letter-spacing: 0.5px; 
+            margin: 10px 0 15px 0; text-align: center;
+        }
+
         .path-tabs { display: flex; gap: 12px; overflow-x: auto; justify-content: center; flex-wrap: wrap; margin-bottom: 5px; }
         
         .tab-btn { 
@@ -53,17 +56,19 @@
         }
         .tab-btn.active { background: #007AFF; color: #fff; box-shadow: 0 4px 12px rgba(0,122,255,0.4); }
 
-        .cmd-list { margin-top: 15px; animation: fadeIn 0.3s ease-out; }
+        .cmd-list { margin-top: 5px; animation: fadeIn 0.3s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 
-        .cmd-item { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 12px; font-size: 16px; color: #1d1d1f; line-height: 1.4; }
-        .cmd-num { background: #007AFF; color: white; min-width: 24px; height: 24px; border-radius: 8px; font-size: 12px; font-weight: bold; display: flex; align-items: center; justify-content: center; margin-top: 1px; }
+        .cmd-item { 
+            padding: 12px 0; border-bottom: 1px solid #f2f2f7;
+            font-size: 16px; color: #1d1d1f; line-height: 1.4; 
+        }
+        .cmd-item:last-child { border-bottom: none; }
 
         .comm-box { margin-top: 15px; padding: 14px; background: #fff9e6; border-radius: 16px; font-size: 14px; color: #7a5c00; border: 1px solid #ffeeba; }
         
         .close-sheet { position: absolute; top: 15px; right: 20px; color: #8e8e93; font-size: 28px; cursor: pointer; border: none; background: none; line-height: 1; padding: 5px; }
         
-        /* Скроллбар для панели */
         #infoSheet::-webkit-scrollbar { width: 4px; }
         #infoSheet::-webkit-scrollbar-thumb { background: #d1d1d6; border-radius: 10px; }
     </style>
@@ -129,45 +134,35 @@ function closeSheet() {
     points.forEach(p => p.paths.forEach(obj => { obj.line.options.set('visible', false); obj.pmEnd.options.set('visible', false); }));
 }
 
-// Показать выбор или сразу детали
 window.showInitialView = function(pointId) {
     const point = points.find(p => p.id == pointId);
-    
-    // Если путь только один — сразу открываем детали
     if (point.rawPaths.length === 1) {
         showPathDetails(pointId, 0);
         return;
     }
-
-    // Если путей несколько — показываем все линии и кнопки цифр
     points.forEach(pt => pt.paths.forEach(obj => {
         const isTarget = (pt.id === pointId);
         obj.line.options.set('visible', isTarget);
         obj.pmEnd.options.set('visible', isTarget);
     }));
-
     let tabs = '<div class="path-tabs">';
     point.rawPaths.forEach((_, i) => {
         tabs += `<button class="tab-btn" onclick="showPathDetails(${pointId}, ${i})">${i + 1}</button>`;
     });
     tabs += '</div>';
-
     document.getElementById('sheetContent').innerHTML = tabs;
     document.getElementById('infoSheet').classList.add('active');
 };
 
-// Отображение конкретного маршрута
 window.showPathDetails = function(pointId, idx) {
     const point = points.find(p => p.id == pointId);
     const path = point.paths[idx];
 
-    // Скрыть все линии, кроме выбранной
     point.paths.forEach((obj, i) => {
         obj.line.options.set('visible', i === idx);
         obj.pmEnd.options.set('visible', i === idx);
     });
 
-    // Формируем кнопки цифр (только если путей > 1)
     let tabs = '';
     if (point.rawPaths.length > 1) {
         tabs = '<div class="path-tabs">';
@@ -177,12 +172,13 @@ window.showPathDetails = function(pointId, idx) {
         tabs += '</div>';
     }
 
-    const cmds = (path.raw.cmd || []).map((c, i) => 
-        `<div class="cmd-item"><div class="cmd-num">${i+1}</div><div>${c}</div></div>`
+    const cmds = (path.raw.cmd || []).map(c => 
+        `<div class="cmd-item">${c}</div>`
     ).join('');
 
     const html = `
         ${tabs}
+        <div class="section-title">Варианты команд:</div>
         <div class="cmd-list">
             ${cmds}
             ${path.raw.comm ? `<div class="comm-box">${path.raw.comm}</div>` : ''}
@@ -191,7 +187,7 @@ window.showPathDetails = function(pointId, idx) {
 
     document.getElementById('sheetContent').innerHTML = html;
     document.getElementById('infoSheet').classList.add('active');
-    document.getElementById('infoSheet').scrollTop = 0; // Скролл вверх
+    document.getElementById('infoSheet').scrollTop = 0;
 };
 
 function calculateAngle(p1, p2) {
