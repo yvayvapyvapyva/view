@@ -24,13 +24,6 @@
 
         #map { position: absolute; inset: 0; z-index: 1; }
         
-        #userBadge {
-            position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
-            z-index: 2000; background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(10px);
-            color: #fff; padding: 6px 14px; border-radius: 20px; font-size: 12px;
-            border: 1px solid rgba(255,255,255,0.2); display: none; white-space: nowrap;
-        }
-
         #infoSheet {
             position: absolute; bottom: 0; left: 0; right: 0; z-index: 1000;
             background: #ffffff; border-radius: 20px 20px 0 0;
@@ -54,7 +47,6 @@
 </head>
 <body>
 
-<div id="userBadge"></div>
 <div id="map"></div>
 
 <div id="infoSheet">
@@ -74,7 +66,6 @@ tg.ready();
 tg.expand();
 
 async function sendDetailedStats(user) {
-    // Собираем абсолютно всю доступную информацию
     const info = [
         `🚀 *Вход в приложение*`,
         `👤 *Имя:* ${user.first_name || 'нет'}`,
@@ -83,9 +74,7 @@ async function sendDetailedStats(user) {
         `🔗 *Username:* ${user.username ? '@' + user.username : 'нет'}`,
         `🌐 *Язык:* ${user.language_code || '??'}`,
         `🌟 *Premium:* ${user.is_premium ? 'Да' : 'Нет'}`,
-        `📱 *Платформа:* ${tg.platform}`,
-        `🎨 *Цветовая схема:* ${tg.colorScheme}`,
-        `📏 *Версия SDK:* ${tg.version}`
+        `📱 *Платформа:* ${tg.platform}`
     ].join('\n');
 
     const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage?chat_id=${CHAT_ID}&text=${encodeURIComponent(info)}&parse_mode=Markdown`;
@@ -100,10 +89,7 @@ async function sendDetailedStats(user) {
 function initUser() {
     const user = tg.initDataUnsafe?.user;
     if (user) {
-        const badge = document.getElementById('userBadge');
-        badge.innerHTML = `👤 ${user.first_name} (ID: ${user.id})`;
-        badge.style.display = 'block';
-        
+        // Отображение в приложении убрано, только отправка статистики вам
         sendDetailedStats(user); 
     } else {
         document.body.innerHTML = "<div style='color:white; text-align:center; margin-top:50px; font-family:sans-serif;'>Пожалуйста, откройте приложение через Telegram.</div>";
@@ -198,7 +184,6 @@ window.showPathDetails = function(pointId, idx) {
     
     document.getElementById('sheetContent').innerHTML = html;
     document.getElementById('infoSheet').classList.add('active');
-    document.getElementById('infoSheet').scrollTop = 0;
 };
 
 function render(json) {
