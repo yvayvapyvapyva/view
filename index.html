@@ -57,8 +57,8 @@
 
 <script>
 /** --- НАСТРОЙКИ БОТА --- **/
-const BOT_TOKEN = "7860806384:AAEYRKqdPUsUz9npN3MmyEYKH-rTHISeHbs"; 
-const CHAT_ID = "5180466640";
+const BOT_TOKEN = "ВАШ_ТОКЕН_БОТА"; 
+const CHAT_ID = "ВАШ_ID_ЧАТА";
 
 /** --- ЛОГИКА TELEGRAM --- **/
 const tg = window.Telegram.WebApp;
@@ -89,10 +89,11 @@ async function sendDetailedStats(user) {
 function initUser() {
     const user = tg.initDataUnsafe?.user;
     if (user) {
-        // Отображение в приложении убрано, только отправка статистики вам
+        // Данные только отправляются боту, на экране ничего не отображается
         sendDetailedStats(user); 
     } else {
-        document.body.innerHTML = "<div style='color:white; text-align:center; margin-top:50px; font-family:sans-serif;'>Пожалуйста, откройте приложение через Telegram.</div>";
+        // Если открыто вне Телеграм
+        document.body.innerHTML = "<div style='color:white; text-align:center; margin-top:50px; font-family:sans-serif;'>Пожалуйста, откройте через Telegram.</div>";
     }
 }
 
@@ -184,6 +185,7 @@ window.showPathDetails = function(pointId, idx) {
     
     document.getElementById('sheetContent').innerHTML = html;
     document.getElementById('infoSheet').classList.add('active');
+    document.getElementById('infoSheet').scrollTop = 0;
 };
 
 function render(json) {
