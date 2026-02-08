@@ -227,13 +227,22 @@ function render(json) {
         const p = { id: d.id, colorName: d.color, rawPaths: d.paths, paths: [] };
         const col = COLOR_MAP[d.color] || d.color;
         
-        // Узкая стрелка, круг r=9, шрифт 8 (для 3-х значных чисел)
+        // ОБНОВЛЕННАЯ МЕТКА: круг в цвет метки, текст с белым контуром
         const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40">
             <g transform="rotate(${d.az},20,20)">
                 <polygon points="20,2 30,35 20,26 10,35" fill="${col}" stroke="#000" stroke-width="1.5"/>
             </g>
-            <circle cx="20" cy="20" r="9" fill="#fff" stroke="#000" stroke-width="1"/>
-            <text x="20" y="23" font-size="8" font-family="Arial" font-weight="bold" text-anchor="middle" fill="#000">${d.id}</text>
+            <circle cx="20" cy="20" r="9" fill="${col}" stroke="#000" stroke-width="1"/>
+            <text x="20" y="23" 
+                  font-size="8" 
+                  font-family="Arial" 
+                  font-weight="bold" 
+                  text-anchor="middle" 
+                  fill="#000" 
+                  stroke="white" 
+                  stroke-width="2.5" 
+                  paint-order="stroke fill"
+                  style="paint-order: stroke fill; stroke-linejoin: round;">${d.id}</text>
         </svg>`;
         
         p.pm = new ymaps.Placemark([d.lat, d.lon], {}, { 
@@ -242,24 +251,47 @@ function render(json) {
             iconImageOffset: [-20, -20], 
             iconImageHref: 'data:image/svg+xml;utf8,' + encodeURIComponent(svg) 
         });
+        
         p.pm.events.add('click', () => showInitialView(d.id));
         
         d.paths.forEach((pathData, i) => {
-            const line = new ymaps.Polyline(pathData.pts, {}, { strokeColor: col, strokeWidth: 5, strokeOpacity: 0.8, visible: false, interactive: false });
+            const line = new ymaps.Polyline(pathData.pts, {}, { 
+                strokeColor: col, strokeWidth: 5, strokeOpacity: 0.8, visible: false, interactive: false 
+            });
             const lastPt = pathData.pts[pathData.pts.length - 1];
             const prevPt = pathData.pts[pathData.pts.length - 2];
             const finalAz = prevPt ? calculateAngle(prevPt, lastPt) : 0;
+            
+            // Конечные точки (номера путей) тоже обновляем для единообразия
             const numSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="34" height="34">
                 <g transform="rotate(${finalAz},17,17)">
                     <polygon points="17,2 25,30 17,22 9,30" fill="${col}" stroke="white" stroke-width="2"/>
                 </g>
-                <circle cx="17" cy="17" r="7" fill="white" stroke="${col}" stroke-width="1.5"/>
-                <text x="17" y="20" font-size="9" font-family="Arial" font-weight="900" text-anchor="middle" fill="#000">${i + 1}</text>
+                <circle cx="17" cy="17" r="7" fill="${col}" stroke="white" stroke-width="1.5"/>
+                <text x="17" y="20" 
+                      font-size="9" 
+                      font-family="Arial" 
+                      font-weight="900" 
+                      text-anchor="middle" 
+                      fill="#000" 
+                      stroke="white" 
+                      stroke-width="2.5" 
+                      style="paint-order: stroke fill; stroke-linejoin: round;">${i + 1}</text>
             </svg>`;
-            const pmEnd = new ymaps.Placemark(lastPt, {}, { iconLayout: 'default#imageWithContent', iconImageSize: [34, 34], iconImageOffset: [-17, -17], iconImageHref: 'data:image/svg+xml;utf8,' + encodeURIComponent(numSvg), visible: false, interactive: false });
+            
+            const pmEnd = new ymaps.Placemark(lastPt, {}, { 
+                iconLayout: 'default#imageWithContent', 
+                iconImageSize: [34, 34], 
+                iconImageOffset: [-17, -17], 
+                iconImageHref: 'data:image/svg+xml;utf8,' + encodeURIComponent(numSvg), 
+                visible: false, 
+                interactive: false 
+            });
+            
             p.paths.push({ line, pmEnd, raw: pathData });
             map.geoObjects.add(line).add(pmEnd);
         });
+        
         map.geoObjects.add(p.pm);
         points.push(p);
     });
