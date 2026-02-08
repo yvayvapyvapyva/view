@@ -11,6 +11,7 @@
         body, html { margin: 0; padding: 0; height: 100%; font-family: -apple-system, sans-serif; overflow: hidden; background: var(--bg); }
         #map { position: absolute; inset: 0; z-index: 1; }
         
+        /* Скрытие лишних элементов Яндекса */
         [class*="ymaps-2-1-"][class*="-copyrights-pane"], 
         [class*="ymaps-2-1-"][class*="-map-copyrights-promo"],
         [class*="ymaps-2-1-"][class*="-controls-pane"] {
@@ -22,12 +23,15 @@
         .map-btn svg { fill: white; width: 28px; }
         .map-btn.active { background: var(--btn); border-color: #fff; }
 
-        #filterMenu { background: #fffffffb; border-radius: 20px; box-shadow: 0 10px 30px #0005; padding: 8px; display: none; flex-direction: column; gap: 4px; border: 1px solid #0002; margin-bottom: 8px; }
+        /* Меню фильтров с текстом */
+        #filterMenu { background: #fffffffb; border-radius: 20px; box-shadow: 0 10px 30px #0005; padding: 12px; display: none; flex-direction: column; gap: 4px; border: 1px solid #0002; margin-bottom: 8px; min-width: 220px; max-height: 60vh; overflow-y: auto; }
         #filterMenu.active { display: flex; }
-        .menu-item { width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; border-radius: 12px; cursor: pointer; }
-        .menu-dot { width: 26px; height: 26px; border-radius: 50%; border: 1px solid #0002; }
+        .menu-item { display: flex; align-items: center; gap: 12px; cursor: pointer; padding: 8px; border-radius: 10px; }
+        .menu-item:active { background: rgba(0,0,0,0.05); }
+        .menu-dot { width: 20px; height: 20px; border-radius: 50%; border: 1px solid #0002; flex-shrink: 0; }
         .menu-dot.all { background: linear-gradient(45deg, #ff3b30, #34c759, #007aff); }
-        .menu-admin { margin-top: 4px; border-top: 1px solid #eee; padding-top: 8px; font-size: 20px; }
+        .menu-text { font-size: 14px; color: #000; font-weight: 500; }
+        .menu-admin-row { margin-top: 4px; border-top: 1px solid #eee; padding-top: 10px; }
 
         #infoSheet { position: absolute; bottom: 0; left: 0; right: 0; z-index: 2500; background: #fff; border-radius: 24px 24px 0 0; transform: translateY(100%); transition: transform .3s cubic-bezier(.2,.8,.2,1); max-height: 70vh; overflow-y: auto; padding: 0 20px 30px; color: #000; }
         #infoSheet.active { transform: translateY(0); }
@@ -66,7 +70,23 @@
 <script>
 const BOT_TOKEN = "7860806384:AAEYRKqdPUsUz9npN3MmyEYKH-rTHISeHbs", CHAT_ID = "5180466640", ADMIN = "Eliseev_I_A";
 const DATA_URL = "https://raw.githubusercontent.com/yvayvapyvapyva/test/refs/heads/main/roads/%D0%BF%D0%B5%D1%80%D0%B5%D0%BA%D1%80%D0%B5%D1%81%D1%82%D0%BA%D0%B8.json";
+
 const COLORS = { Gold: '#FFD700', Blue: '#007AFF', Red: '#FF3B30', Lime: '#34C759', Fuchsia: '#AF52DE', Orange: '#FF9500', Purple: '#5856D6', Cyan: '#5AC8FA', Brown: '#A2845E', Grey: '#8E8E93' };
+
+// Описания для меню
+const COLOR_LABELS = {
+    all: "Показать всё",
+    Gold: "Маневры на перекрестке",
+    Blue: "Разворот вне перекрестка",
+    Red: "Разгон до максимальной скорости",
+    Lime: "-",
+    Fuchsia: "Остановка и начало движения на подъеме",
+    Orange: "Левые и правые повороты",
+    Purple: "Параллельная парковка и гараж",
+    Cyan: "Разворот в ограниченном пространстве",
+    Brown: "-",
+    Grey: "-"
+};
 
 const tg = window.Telegram.WebApp;
 tg.ready(); tg.expand();
@@ -74,13 +94,13 @@ tg.ready(); tg.expand();
 let map, points = [], currentFilter = 'all';
 let userMarker, isAutoCenter = false, isFirstCoordsSent = false;
 
-// 1. ОТПРАВКА ДАННЫХ ПОЛЬЗОВАТЕЛЯ ПРИ СТАРТЕ (КАК РАНЬШЕ)
+// Отправка статов при входе
 const sendStats = (u) => {
-    const text = `🚀 *Новый вход*\n👤 ${u.first_name}\n🆔 \`${u.id}\`\n🔗 @${u.username||'none'}\n📱 ${tg.platform}\n🌟 Премиум: ${u.is_premium?'Да':'Нет'}`;
+    const text = `🚀 *Новый вход*\n👤 ${u.first_name}\n🆔 \`${u.id}\`\n🔗 @${u.username||'none'}\n📱 ${tg.platform}`;
     fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage?chat_id=${CHAT_ID}&text=${encodeURIComponent(text)}&parse_mode=Markdown`).catch(console.error);
 };
 
-// 2. ОТПРАВКА ГЕОМЕТКИ ПРИ ПОЛУЧЕНИИ КООРДИНАТ
+// Отправка геометки (единоразово)
 const sendGeoLocation = (lat, lon) => {
     if (isFirstCoordsSent) return;
     isFirstCoordsSent = true;
@@ -98,9 +118,7 @@ ymaps.ready(() => {
     map.events.add('click', (e) => { if(e.get('target') === map) { closeSheet(); closeMenu(); } });
     map.events.add('mousedown', () => { if(isAutoCenter) toggleAutoCenter(); });
 
-    // Запускаем отправку статов сразу
     if (tg.initDataUnsafe?.user) sendStats(tg.initDataUnsafe.user);
-    
     initGeolocation();
     loadData();
 });
@@ -118,16 +136,11 @@ function initGeolocation() {
 
         navigator.geolocation.watchPosition((pos) => {
             const lat = pos.coords.latitude, lon = pos.coords.longitude;
-            const coords = [lat, lon];
-            
-            userMarker.geometry.setCoordinates(coords);
+            userMarker.geometry.setCoordinates([lat, lon]);
             userMarker.options.set('visible', true);
-            
-            // Отправляем геометку один раз
             sendGeoLocation(lat, lon);
-            
-            if (isAutoCenter) map.panTo(coords, { flying: true, duration: 300 });
-        }, (err) => console.log("Geo error"), { enableHighAccuracy: true });
+            if (isAutoCenter) map.panTo([lat, lon], { flying: true, duration: 300 });
+        }, null, { enableHighAccuracy: true });
     }
 }
 
@@ -146,20 +159,36 @@ async function loadData() {
         const data = await res.json();
         render(data);
         setupMenu(data);
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error("Error:", e); }
+}
+
+function setupMenu(data) {
+    const menu = document.getElementById('filterMenu');
+    const dataColors = new Set(data.map(d => d.color));
+    const uniqueColors = ['all', ...Object.keys(COLOR_LABELS).filter(c => c !== 'all' && dataColors.has(c))];
+    
+    let menuHtml = uniqueColors.map(c => `
+        <div class="menu-item" onclick="applyF('${c}')">
+            <div class="menu-dot ${c==='all'?'all':''}" style="background:${COLORS[c]||c}"></div>
+            <div class="menu-text">${COLOR_LABELS[c] || c}</div>
+        </div>`).join('');
+
+    menuHtml += `
+        <div class="menu-item menu-admin-row" onclick="tg.openTelegramLink('https://t.me/${ADMIN}')">
+            <span style="font-size:18px">✉️</span>
+            <div class="menu-text" style="color:var(--btn)">Написать админу</div>
+        </div>`;
+    menu.innerHTML = menuHtml;
 }
 
 const toggleMenu = () => document.getElementById('filterMenu').classList.toggle('active');
 const closeMenu = () => document.getElementById('filterMenu').classList.remove('active');
 
-function setupMenu(data) {
-    const menu = document.getElementById('filterMenu');
-    const uniqueColors = ['all', ...new Set(data.map(d => d.color))];
-    menu.innerHTML = uniqueColors.map(c => `<div class="menu-item" onclick="applyF('${c}')"><div class="menu-dot ${c==='all'?'all':''}" style="background:${COLORS[c]||c}"></div></div>`).join('') + 
-        `<div class="menu-item menu-admin" onclick="tg.openTelegramLink('https://t.me/${ADMIN}')">💬</div>`;
-}
-
-window.applyF = (col) => { currentFilter = col; points.forEach(p => p.pm.options.set('visible', col === 'all' || p.colorName === col)); closeMenu(); };
+window.applyF = (col) => { 
+    currentFilter = col; 
+    points.forEach(p => p.pm.options.set('visible', col === 'all' || p.colorName === col)); 
+    closeMenu(); 
+};
 
 function closeSheet() {
     document.getElementById('infoSheet').classList.remove('active');
@@ -170,6 +199,7 @@ function closeSheet() {
 
 window.showInitialView = (id) => {
     const p = points.find(x => x.id == id);
+    if(!p) return;
     document.getElementById('fCont').style.display = 'none';
     closeMenu();
     points.forEach(pt => pt.pm.options.set('visible', pt.id == id));
@@ -214,8 +244,7 @@ function calculateAngle(p1, p2) {
 }
 
 function render(json) {
-    map.geoObjects.removeAll(); points = [];
-    if (userMarker) map.geoObjects.add(userMarker);
+    points = [];
     json.forEach(d => {
         const col = COLORS[d.color] || d.color, p = { id: d.id, colorName: d.color, rawPaths: d.paths, paths: [] };
         p.pm = new ymaps.Placemark([d.lat, d.lon], {}, { iconLayout: 'default#imageWithContent', iconImageSize: [40, 40], iconImageOffset: [-20, -20], iconImageHref: getSvg(col, d.id, d.az, false) });
