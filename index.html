@@ -15,59 +15,33 @@
             --button-text: var(--tg-theme-button-text-color, #ffffff);
         }
 
-        body, html { 
-            margin: 0; padding: 0; height: 100%; 
-            font-family: -apple-system, sans-serif; 
-            overflow: hidden; background: var(--bg-color); 
-        }
-
+        body, html { margin: 0; padding: 0; height: 100%; font-family: -apple-system, sans-serif; overflow: hidden; background: var(--bg-color); }
         #map { position: absolute; inset: 0; z-index: 1; }
 
-        .filter-container {
-            position: absolute; bottom: 40px; right: 16px; z-index: 2000;
-            display: flex; flex-direction: column-reverse; align-items: flex-end; gap: 12px;
-        }
-
-        #filterTrigger {
-            width: 56px; height: 56px; border-radius: 28px;
-            background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(10px);
-            border: 2px solid rgba(255,255,255,0.3);
-            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-            cursor: pointer; display: flex; align-items: center; justify-content: center;
-        }
-
-        #filterMenu {
-            background: rgba(255, 255, 255, 0.98); border-radius: 20px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-            padding: 10px; display: none; flex-direction: column;
-            min-width: 160px; border: 1px solid rgba(0,0,0,0.1);
-            margin-bottom: 8px;
-        }
+        .filter-container { position: absolute; bottom: 40px; right: 16px; z-index: 2000; display: flex; flex-direction: column-reverse; align-items: flex-end; gap: 12px; }
+        #filterTrigger { width: 56px; height: 56px; border-radius: 28px; background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(10px); border: 2px solid rgba(255,255,255,0.3); box-shadow: 0 4px 20px rgba(0,0,0,0.5); cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        #filterMenu { background: rgba(255, 255, 255, 0.98); border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); padding: 10px; display: none; flex-direction: column; min-width: 160px; border: 1px solid rgba(0,0,0,0.1); margin-bottom: 8px; }
         #filterMenu.active { display: flex; }
-
-        .menu-item {
-            display: flex; align-items: center; gap: 12px;
-            padding: 12px 16px; border-radius: 12px;
-            cursor: pointer; color: #000; font-size: 16px; font-weight: 600;
-        }
-        .menu-item:active { background: #f2f2f7; }
-        .menu-dot { width: 16px; height: 16px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.1); flex-shrink: 0; }
+        .menu-item { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 12px; cursor: pointer; color: #000; font-size: 16px; font-weight: 600; }
+        .menu-dot { width: 16px; height: 16px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.1); }
         .menu-dot.all { background: linear-gradient(45deg, #ff3b30, #34c759, #007aff); }
 
-        #infoSheet {
-            position: absolute; bottom: 0; left: 0; right: 0; z-index: 2500;
-            background: #ffffff; border-radius: 24px 24px 0 0;
-            transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
-            max-height: 65vh; overflow-y: auto; padding: 0 20px 30px 20px; 
-            display: flex; flex-direction: column; width: 100%; box-sizing: border-box; color: #000;
-        }
+        #infoSheet { position: absolute; bottom: 0; left: 0; right: 0; z-index: 2500; background: #ffffff; border-radius: 24px 24px 0 0; transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); max-height: 70vh; overflow-y: auto; padding: 0 20px 30px 20px; display: flex; flex-direction: column; width: 100%; box-sizing: border-box; color: #000; }
         #infoSheet.active { transform: translateY(0); }
         .sheet-handle { width: 40px; height: 5px; background: #e5e5ea; border-radius: 3px; margin: 12px auto; }
-        .section-title { font-size: 12px; font-weight: 800; color: #8e8e93; text-transform: uppercase; text-align: center; margin: 10px 0; }
-        .path-tabs { display: flex; gap: 10px; overflow-x: auto; justify-content: center; margin-bottom: 12px; }
-        .tab-btn { min-width: 48px; height: 48px; border-radius: 16px; border: none; background: #f2f2f7; font-weight: 800; }
+        
+        .path-tabs { display: flex; gap: 10px; overflow-x: auto; justify-content: center; margin-bottom: 15px; }
+        .tab-btn { min-width: 48px; height: 48px; border-radius: 16px; border: none; background: #f2f2f7; font-weight: 800; font-size: 17px; }
         .tab-btn.active { background: var(--button-color); color: var(--button-text); }
-        .cmd-item { padding: 14px 0; border-bottom: 1px solid #f2f2f7; font-size: 16px; }
+
+        .cmd-container { border-radius: 14px; overflow: hidden; }
+        .cmd-container.clickable { cursor: pointer; }
+        .cmd-item { padding: 16px; border-bottom: 1px solid #f2f2f7; font-size: 17px; line-height: 1.4; display: flex; justify-content: space-between; align-items: center; }
+        .cmd-item.preview { background: #f9f9f9; border: 1px solid #eee; font-weight: 600; border-radius: 14px; margin-bottom: 4px; }
+        .cmd-item.active-list { background: #fff; border-left: 4px solid var(--button-color); }
+        .expand-icon { color: var(--button-color); font-size: 12px; font-weight: bold; margin-left: 8px; white-space: nowrap; }
+        
+        .comm-box { margin-top: 12px; padding: 14px; background: #fff9e6; border-radius: 12px; font-size: 15px; color: #7a5c00; border: 1px solid #ffeeba; }
         .close-sheet { position: absolute; top: 16px; right: 16px; font-size: 28px; border: none; background: none; color: #d1d1d6; }
     </style>
 </head>
@@ -89,8 +63,6 @@
 </div>
 
 <script>
-const BOT_TOKEN = "ВАШ_ТОКЕН_БОТА"; 
-const CHAT_ID = "ВАШ_ID_ЧАТА";
 const DEFAULT_URL = "https://raw.githubusercontent.com/yvayvapyvapyva/test/refs/heads/main/roads/%D0%BF%D0%B5%D1%80%D0%B5%D0%BA%D1%80%D0%B5%D1%81%D1%82%D0%BA%D0%B8.json";
 const COLOR_MAP = { Gold: '#FFD700', Blue: '#007AFF', Red: '#FF3B30', Lime: '#34C759', Fuchsia: '#AF52DE', Orange: '#FF9500', Purple: '#5856D6', Cyan: '#5AC8FA', Brown: '#A2845E', Grey: '#8E8E93' };
 
@@ -103,9 +75,7 @@ let currentFilter = 'all';
 
 ymaps.ready(() => {
     map = new ymaps.Map("map", { center: [56.3399, 43.9332], zoom: 17, type: 'yandex#satellite', controls: [] });
-    map.events.add('click', (e) => { 
-        if (e.get('target') === map) { closeSheet(); closeMenu(); }
-    });
+    map.events.add('click', (e) => { if (e.get('target') === map) { closeSheet(); closeMenu(); } });
     loadData();
 });
 
@@ -133,32 +103,20 @@ function setupMenu(data) {
         if (col !== 'all') dot.style.backgroundColor = COLOR_MAP[col] || col;
         item.appendChild(dot);
         item.appendChild(document.createTextNode(col === 'all' ? 'Все метки' : col));
-        item.onclick = () => {
-            currentFilter = col;
-            applyFilter();
-            closeMenu();
-        };
+        item.onclick = () => { currentFilter = col; applyFilter(); closeMenu(); };
         menu.appendChild(item);
     });
 }
 
 function applyFilter() {
-    points.forEach(p => {
-        const isVisible = (currentFilter === 'all' || p.colorName === currentFilter);
-        p.pm.options.set('visible', isVisible);
-    });
+    points.forEach(p => p.pm.options.set('visible', (currentFilter === 'all' || p.colorName === currentFilter)));
 }
 
 function closeSheet() { 
     document.getElementById('infoSheet').classList.remove('active');
     document.getElementById('filterContainer').style.display = 'flex';
     applyFilter();
-    points.forEach(p => {
-        p.paths.forEach(obj => { 
-            obj.line.options.set('visible', false); 
-            obj.pmEnd.options.set('visible', false); 
-        });
-    });
+    points.forEach(p => p.paths.forEach(obj => { obj.line.options.set('visible', false); obj.pmEnd.options.set('visible', false); }));
 }
 
 window.showInitialView = function(pointId) {
@@ -166,15 +124,9 @@ window.showInitialView = function(pointId) {
     document.getElementById('filterContainer').style.display = 'none';
     closeMenu();
 
-    // Скрываем другие метки
     points.forEach(pt => {
         pt.pm.options.set('visible', pt.id == pointId);
-        if (pt.id !== pointId) {
-            pt.paths.forEach(obj => {
-                obj.line.options.set('visible', false);
-                obj.pmEnd.options.set('visible', false);
-            });
-        }
+        if (pt.id !== pointId) pt.paths.forEach(obj => { obj.line.options.set('visible', false); obj.pmEnd.options.set('visible', false); });
     });
 
     if (point.rawPaths.length === 1) {
@@ -182,41 +134,58 @@ window.showInitialView = function(pointId) {
         return;
     }
 
-    // ПОКАЗЫВАЕМ ВСЕ ЛИНИИ ТЕКУЩЕЙ ТОЧКИ ДЛЯ ВЫБОРА
-    point.paths.forEach(obj => {
-        obj.line.options.set('visible', true);
-        obj.pmEnd.options.set('visible', true);
-    });
+    point.paths.forEach(obj => { obj.line.options.set('visible', true); obj.pmEnd.options.set('visible', true); });
 
     let tabs = '<div class="path-tabs">';
-    point.rawPaths.forEach((_, i) => {
-        tabs += `<button class="tab-btn" onclick="showPathDetails(${pointId}, ${i})">${i + 1}</button>`;
-    });
+    point.rawPaths.forEach((_, i) => tabs += `<button class="tab-btn" onclick="showPathDetails(${pointId}, ${i})">${i + 1}</button>`);
     tabs += '</div>';
-    document.getElementById('sheetContent').innerHTML = tabs;
+    document.getElementById('sheetContent').innerHTML = tabs + '<div style="text-align:center; color:#8e8e93; font-size:14px; margin-top:20px;">Выберите направление</div>';
     document.getElementById('infoSheet').classList.add('active');
 };
 
-window.showPathDetails = function(pointId, idx) {
+window.showPathDetails = function(pointId, idx, full = false) {
     const point = points.find(p => p.id == pointId);
-    point.paths.forEach((obj, i) => {
-        obj.line.options.set('visible', i === idx);
-        obj.pmEnd.options.set('visible', i === idx);
-    });
+    const path = point.paths[idx];
+    const allCmds = path.raw.cmd || [];
+    const hasMultiple = allCmds.length > 1; // Проверка на количество команд
+    
+    point.paths.forEach((obj, i) => { obj.line.options.set('visible', i === idx); obj.pmEnd.options.set('visible', i === idx); });
 
     let tabs = '';
     if (point.rawPaths.length > 1) {
         tabs = '<div class="path-tabs">';
-        point.rawPaths.forEach((_, i) => {
-            tabs += `<button class="tab-btn ${i === idx ? 'active' : ''}" onclick="showPathDetails(${pointId}, ${i})">${i + 1}</button>`;
-        });
+        point.rawPaths.forEach((_, i) => tabs += `<button class="tab-btn ${i === idx ? 'active' : ''}" onclick="showPathDetails(${pointId}, ${i})">${i + 1}</button>`);
         tabs += '</div>';
     }
 
-    const path = point.paths[idx];
-    const cmds = (path.raw.cmd || []).map(c => `<div class="cmd-item">${c}</div>`).join('');
-    const html = `${tabs}<div class="section-title">Команды:</div><div class="cmd-list">${cmds}${path.raw.comm ? `<div class="comm-box">${path.raw.comm}</div>` : ''}</div>`;
-    document.getElementById('sheetContent').innerHTML = html;
+    let cmdsHtml = '';
+    
+    if (!full && allCmds.length > 0) {
+        // СВЕРНУТЫЙ ВИД
+        const clickAttr = hasMultiple ? `onclick="showPathDetails(${pointId}, ${idx}, true)"` : '';
+        cmdsHtml = `
+            <div class="cmd-container ${hasMultiple ? 'clickable' : ''}" ${clickAttr}>
+                <div class="cmd-item preview">
+                    <span>${allCmds[0]}</span>
+                    ${hasMultiple ? '<span class="expand-icon">Развернуть ▼</span>' : ''}
+                </div>
+            </div>`;
+    } else {
+        // РАЗВЕРНУТЫЙ ВИД
+        cmdsHtml = `<div class="cmd-container clickable" onclick="showPathDetails(${pointId}, ${idx}, false)">`;
+        allCmds.forEach((c, i) => {
+            const isFirst = i === 0;
+            cmdsHtml += `
+                <div class="cmd-item ${isFirst ? 'active-list' : ''}">
+                    <span>${c}</span>
+                    ${(isFirst && hasMultiple) ? '<span class="expand-icon">Свернуть ▲</span>' : ''}
+                </div>`;
+        });
+        cmdsHtml += '</div>';
+    }
+
+    const comm = path.raw.comm ? `<div class="comm-box">${path.raw.comm}</div>` : '';
+    document.getElementById('sheetContent').innerHTML = tabs + cmdsHtml + comm;
     document.getElementById('infoSheet').classList.add('active');
 };
 
@@ -227,13 +196,8 @@ function render(json) {
         const p = { id: d.id, colorName: d.color, rawPaths: d.paths, paths: [] };
         const col = COLOR_MAP[d.color] || d.color;
         const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><g transform="rotate(${d.az},20,20)"><polygon points="20,2 35,35 20,26 5,35" fill="${col}" stroke="#000" stroke-width="1.5"/></g><circle cx="20" cy="20" r="7" fill="#fff" stroke="#000" stroke-width="1"/><text x="20" y="24" font-size="10" font-family="Arial" font-weight="bold" text-anchor="middle">${d.id}</text></svg>`;
-        
-        p.pm = new ymaps.Placemark([d.lat, d.lon], {}, {
-            iconLayout: 'default#imageWithContent', iconImageSize: [40, 40], iconImageOffset: [-20, -20],
-            iconImageHref: 'data:image/svg+xml;utf8,' + encodeURIComponent(svg)
-        });
+        p.pm = new ymaps.Placemark([d.lat, d.lon], {}, { iconLayout: 'default#imageWithContent', iconImageSize: [40, 40], iconImageOffset: [-20, -20], iconImageHref: 'data:image/svg+xml;utf8,' + encodeURIComponent(svg) });
         p.pm.events.add('click', () => showInitialView(d.id));
-
         d.paths.forEach((pathData, i) => {
             const line = new ymaps.Polyline(pathData.pts, {}, { strokeColor: col, strokeWidth: 5, strokeOpacity: 0.8, visible: false, interactive: false });
             const lastPt = pathData.pts[pathData.pts.length - 1];
