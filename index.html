@@ -5,11 +5,19 @@
     <title>Route Viewer Pro</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script src="https://api-maps.yandex.ru/2.1/?apikey=YANDEX_API_KEY&lang=ru_RU"></script>
+    <script src="https://api-maps.yandex.ru/2.1/?apikey=YANDEX_API_KEY&lang=ru_RU&suppressMapOpenBlock=true"></script>
     <style>
         :root { --bg: var(--tg-theme-bg-color, #000); --btn: var(--tg-theme-button-color, #007AFF); --btn-txt: var(--tg-theme-button-text-color, #fff); }
         body, html { margin: 0; padding: 0; height: 100%; font-family: -apple-system, sans-serif; overflow: hidden; background: var(--bg); }
         #map { position: absolute; inset: 0; z-index: 1; }
+        
+        /* Жесткое скрытие всех копирайтов и кнопок Яндекса */
+        [class*="ymaps-2-1-"][class*="-copyrights-pane"], 
+        [class*="ymaps-2-1-"][class*="-map-copyrights-promo"],
+        [class*="ymaps-2-1-"][class*="-controls-pane"] {
+            display: none !important;
+        }
+
         .filter-container { position: absolute; bottom: 40px; right: 16px; z-index: 2000; display: flex; flex-direction: column-reverse; align-items: flex-end; gap: 12px; }
         #filterTrigger { width: 56px; height: 56px; border-radius: 50%; background: rgba(0,0,0,.8); backdrop-filter: blur(10px); border: 2px solid rgba(255,255,255,.3); box-shadow: 0 4px 20px #0008; cursor: pointer; display: flex; align-items: center; justify-content: center; }
         #filterMenu { background: #fffffffb; border-radius: 20px; box-shadow: 0 10px 30px #0005; padding: 8px; display: none; flex-direction: column; gap: 4px; border: 1px solid #0002; margin-bottom: 8px; }
@@ -74,7 +82,16 @@ const sendStats = (u) => {
 };
 
 ymaps.ready(() => {
-    map = new ymaps.Map("map", { center: [56.3399, 43.9332], zoom: 17, type: 'yandex#satellite', controls: [] });
+    // В объект параметров добавлен suppressMapOpenBlock: true
+    map = new ymaps.Map("map", { 
+        center: [56.3399, 43.9332], 
+        zoom: 17, 
+        type: 'yandex#satellite', 
+        controls: [] 
+    }, {
+        suppressMapOpenBlock: true
+    });
+    
     map.events.add('click', (e) => { if(e.get('target') === map) { closeSheet(); closeMenu(); } });
     if (tg.initDataUnsafe?.user) sendStats(tg.initDataUnsafe.user);
     loadData();
