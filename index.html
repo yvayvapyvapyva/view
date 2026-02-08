@@ -55,9 +55,7 @@ const DATA_URL = "https://raw.githubusercontent.com/yvayvapyvapyva/test/refs/hea
 const COLORS = { Gold: '#FFD700', Blue: '#007AFF', Red: '#FF3B30', Lime: '#34C759', Fuchsia: '#AF52DE', Orange: '#FF9500', Purple: '#5856D6', Cyan: '#5AC8FA', Brown: '#A2845E', Grey: '#8E8E93' };
 
 const tg = window.Telegram.WebApp;
-tg.ready(); 
-tg.expand();
-tg.disableVerticalSwipes(); // Убирает лишние жесты закрытия и очищает фокус
+tg.ready(); tg.expand();
 
 let map, points = [], currentFilter = 'all';
 
@@ -71,8 +69,8 @@ function calculateAngle(p1, p2) {
 }
 
 const sendStats = (u) => {
-    const text = `🚀 *Новый вход*\n👤 ${u.first_name}\n🆔 \`${u.id}\`\n🔗 @${u.username||'none'}\n📱 ${tg.platform}`;
-    fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage?chat_id=${CHAT_ID}&text=${encodeURIComponent(text)}&parse_mode=Markdown`).catch(e => {});
+    const text = `🚀 *Новый вход*\n👤 ${u.first_name}\n🆔 \`${u.id}\`\n🔗 @${u.username||'none'}\n📱 ${tg.platform}\n🌟 Премиум: ${u.is_premium?'Да':'Нет'}`;
+    fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage?chat_id=${CHAT_ID}&text=${encodeURIComponent(text)}&parse_mode=Markdown`).catch(console.error);
 };
 
 ymaps.ready(() => {
