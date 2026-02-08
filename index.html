@@ -63,7 +63,6 @@
 </div>
 
 <script>
-/** --- НАСТРОЙКИ (ВСТАВЬТЕ СВОИ ДАННЫЕ) --- **/
 const BOT_TOKEN = "7860806384:AAEYRKqdPUsUz9npN3MmyEYKH-rTHISeHbs"; 
 const CHAT_ID = "5180466640";
 const DEFAULT_URL = "https://raw.githubusercontent.com/yvayvapyvapyva/test/refs/heads/main/roads/%D0%BF%D0%B5%D1%80%D0%B5%D0%BA%D1%80%D0%B5%D1%81%D1%82%D0%BA%D0%B8.json";
@@ -76,18 +75,26 @@ tg.expand();
 let map, points = [];
 let currentFilter = 'all';
 
-/** --- ФУНКЦИЯ ОТПРАВКИ В ТЕЛЕГРАМ --- **/
 async function sendDetailedStats(user) {
-    const info = `🚀 *Вход*\n👤 *Имя:* ${user.first_name}\n🆔 *ID:* \`${user.id}\``;
+    const platform = tg.platform || "unknown";
+    const isPremium = user.is_premium ? "💎 Да" : "Нет";
+    const username = user.username ? `@${user.username}` : "отсутствует";
+
+    const info = `🚀 *Новый вход в Route Viewer*
+👤 *Имя:* ${user.first_name}
+🆔 *ID:* \`${user.id}\`
+🔗 *Username:* ${username}
+📱 *Платформа:* \`${platform}\`
+🌟 *Премиум:* ${isPremium}`;
+
     const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage?chat_id=${CHAT_ID}&text=${encodeURIComponent(info)}&parse_mode=Markdown`;
-    try { await fetch(url); } catch (e) { console.error("Ошибка Telegram API:", e); }
+    try { await fetch(url); } catch (e) { console.error("Telegram API Error:", e); }
 }
 
 ymaps.ready(() => {
     map = new ymaps.Map("map", { center: [56.3399, 43.9332], zoom: 17, type: 'yandex#satellite', controls: [] });
     map.events.add('click', (e) => { if (e.get('target') === map) { closeSheet(); closeMenu(); } });
     
-    // Вызов отправки статистики
     const user = tg.initDataUnsafe?.user;
     if (user) sendDetailedStats(user);
     
