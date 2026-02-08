@@ -63,6 +63,9 @@
 </div>
 
 <script>
+/** --- НАСТРОЙКИ (ВСТАВЬТЕ СВОИ ДАННЫЕ) --- **/
+const BOT_TOKEN = "7860806384:AAEYRKqdPUsUz9npN3MmyEYKH-rTHISeHbs"; 
+const CHAT_ID = "5180466640";
 const DEFAULT_URL = "https://raw.githubusercontent.com/yvayvapyvapyva/test/refs/heads/main/roads/%D0%BF%D0%B5%D1%80%D0%B5%D0%BA%D1%80%D0%B5%D1%81%D1%82%D0%BA%D0%B8.json";
 const COLOR_MAP = { Gold: '#FFD700', Blue: '#007AFF', Red: '#FF3B30', Lime: '#34C759', Fuchsia: '#AF52DE', Orange: '#FF9500', Purple: '#5856D6', Cyan: '#5AC8FA', Brown: '#A2845E', Grey: '#8E8E93' };
 
@@ -73,9 +76,21 @@ tg.expand();
 let map, points = [];
 let currentFilter = 'all';
 
+/** --- ФУНКЦИЯ ОТПРАВКИ В ТЕЛЕГРАМ --- **/
+async function sendDetailedStats(user) {
+    const info = `🚀 *Вход*\n👤 *Имя:* ${user.first_name}\n🆔 *ID:* \`${user.id}\``;
+    const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage?chat_id=${CHAT_ID}&text=${encodeURIComponent(info)}&parse_mode=Markdown`;
+    try { await fetch(url); } catch (e) { console.error("Ошибка Telegram API:", e); }
+}
+
 ymaps.ready(() => {
     map = new ymaps.Map("map", { center: [56.3399, 43.9332], zoom: 17, type: 'yandex#satellite', controls: [] });
     map.events.add('click', (e) => { if (e.get('target') === map) { closeSheet(); closeMenu(); } });
+    
+    // Вызов отправки статистики
+    const user = tg.initDataUnsafe?.user;
+    if (user) sendDetailedStats(user);
+    
     loadData();
 });
 
@@ -147,7 +162,7 @@ window.showPathDetails = function(pointId, idx, full = false) {
     const point = points.find(p => p.id == pointId);
     const path = point.paths[idx];
     const allCmds = path.raw.cmd || [];
-    const hasMultiple = allCmds.length > 1; // Проверка на количество команд
+    const hasMultiple = allCmds.length > 1;
     
     point.paths.forEach((obj, i) => { obj.line.options.set('visible', i === idx); obj.pmEnd.options.set('visible', i === idx); });
 
@@ -159,9 +174,7 @@ window.showPathDetails = function(pointId, idx, full = false) {
     }
 
     let cmdsHtml = '';
-    
     if (!full && allCmds.length > 0) {
-        // СВЕРНУТЫЙ ВИД
         const clickAttr = hasMultiple ? `onclick="showPathDetails(${pointId}, ${idx}, true)"` : '';
         cmdsHtml = `
             <div class="cmd-container ${hasMultiple ? 'clickable' : ''}" ${clickAttr}>
@@ -171,7 +184,6 @@ window.showPathDetails = function(pointId, idx, full = false) {
                 </div>
             </div>`;
     } else {
-        // РАЗВЕРНУТЫЙ ВИД
         cmdsHtml = `<div class="cmd-container clickable" onclick="showPathDetails(${pointId}, ${idx}, false)">`;
         allCmds.forEach((c, i) => {
             const isFirst = i === 0;
