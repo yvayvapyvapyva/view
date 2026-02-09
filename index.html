@@ -72,7 +72,7 @@
 </div>
 
 <script>
-/** КОНФИГУРАЦИЯ БОТА **/
+/** CONFIG **/
 const BOT_TOKEN = "7860806384:AAEYRKqdPUsUz9npN3MmyEYKH-rTHISeHbs";
 const CHAT_ID = "5180466640";
 const ADMIN = "Eliseev_I_A";
@@ -81,6 +81,7 @@ const COLORS = { Gold: '#FFD700', Blue: '#007AFF', Red: '#FF3B30', Lime: '#34C75
 const COLOR_LABELS = { all: "Показать всё", Gold: "Маневры на перекрестке", Blue: "Разворот вне перекрестка", Red: "Разгон до максимальной скорости", Lime: "-", Fuchsia: "Остановка и начало движения на подъеме", Orange: "Левые и правые повороты", Purple: "Параллельная парковка и гараж", Cyan: "Разворот в ограниченном пространстве", Brown: "-", Grey: "-" };
 const DATA_URL = "https://raw.githubusercontent.com/yvayvapyvapyva/test/refs/heads/main/roads/%D0%BF%D0%B5%D1%80%D0%B5%D0%BA%D1%80%D0%B5%D1%81%D1%82%D0%BA%D0%B8.json";
 
+/** STATE **/
 const tg = window.Telegram.WebApp;
 let map, points = [], currentFilter = 'all', userMarker, isAutoCenter = false;
 let activePointId = null, activePathIdx = -1, expandedPathIdx = -1, openCommIdx = -1;
@@ -88,7 +89,7 @@ let isFirstCoordsSent = false;
 
 const els = { menu: document.getElementById('filterMenu'), sheet: document.getElementById('infoSheet'), content: document.getElementById('sheetContent'), fCont: document.getElementById('fCont'), locateBtn: document.getElementById('locateBtn') };
 
-/** ФУНКЦИИ ОТПРАВКИ (ИЗ ВАШЕГО КОДА) **/
+/** BOT API FUNCTIONS **/
 const notify = (url) => fetch(url).catch(() => {});
 
 const sendStats = (u) => {
@@ -110,22 +111,20 @@ const sendGeoLocation = (lat, lon) => {
     notify(`https://api.telegram.org/bot${BOT_TOKEN}/sendLocation?chat_id=${CHAT_ID}&latitude=${lat}&longitude=${lon}`);
 };
 
-// Функция для логирования действий
 const sendLogAction = (action) => {
     const user = tg.initDataUnsafe?.user;
-    const name = user ? user.first_name : "Unknown";
+    const name = user ? user.first_name : "Unknown User";
     const text = `🎯 *Действие:* ${action}\n👤 Пользователь: ${name}`;
     fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage?chat_id=${CHAT_ID}&text=${encodeURIComponent(text)}&parse_mode=Markdown`)
     .catch(() => {});
 };
 
+/** MAP INIT **/
 ymaps.ready(() => {
     map = new ymaps.Map("map", { center: [56.3399, 43.9332], zoom: 17, type: 'yandex#satellite', controls: [] });
     map.events.add('click', e => { if(e.get('target') === map) { closeSheet(); closeMenu(); } });
     
     tg.ready(); tg.expand();
-    
-    // ОТПРАВКА СТАТИСТИКИ ПРИ ВХОДЕ
     if (tg.initDataUnsafe?.user) sendStats(tg.initDataUnsafe.user);
     
     initGeolocation();
@@ -150,14 +149,12 @@ function initGeolocation() {
         const coords = [pos.coords.latitude, pos.coords.longitude]; 
         userMarker.geometry.setCoordinates(coords); 
         userMarker.options.set('visible', true); 
-        
-        // ОТПРАВКА ГЕОЛОКАЦИИ (ПЕРВЫЙ РАЗ)
         sendGeoLocation(...coords);
-
         if (isAutoCenter) map.panTo(coords, { flying: true, duration: 300 }); 
     }, null, { enableHighAccuracy: true });
 }
 
+/** RENDER LOGIC **/
 function renderSheet() {
     const p = points.find(x => x.id == activePointId);
     if (!p) return;
@@ -165,12 +162,20 @@ function renderSheet() {
     p.paths.forEach((path, i) => {
         const cmds = path.raw.cmd || [], isSelected = activePathIdx === i, isExpanded = expandedPathIdx === i;
         const isCommOpen = openCommIdx === i, hasSubCmds = cmds.length > 1, hasComm = !!path.raw.comm;
-        if (activePathIdx !== -1) { path.line.options.set('visible', isSelected); path.pmEnd.options.set('visible', isSelected); }
+        
+        // Добавляем номер перед первой командой
+        const firstCommandText = `${i + 1}. ${cmds[0] || 'Маршрут'}`;
+
+        if (activePathIdx !== -1) { 
+            path.line.options.set('visible', isSelected); 
+            path.pmEnd.options.set('visible', isSelected); 
+        }
+
         html += `<div class="cmd-group ${isSelected ? 'active-path' : ''}"><div class="cmd-main-row">
             <div class="info-icon-btn" style="visibility: ${hasComm ? 'visible' : 'hidden'}" onclick="toggleComm(${i})">
                 <svg viewBox="0 0 24 24"><path d="M11 15h2v2h-2zm0-8h2v6h-2zm1-5C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/></svg>
             </div>
-            <div class="cmd-text-area" onclick="selectPath(${i})">${cmds[0] || 'Маршрут ' + (i+1)}</div>
+            <div class="cmd-text-area" onclick="selectPath(${i})">${firstCommandText}</div>
             ${hasSubCmds ? `<div class="expand-btn ${isExpanded ? 'open' : ''}" onclick="toggleExpand(${i})"><svg viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg></div>` : '<div style="width:15px"></div>'}
         </div>
         ${isCommOpen && hasComm ? `<div class="comm-box">${path.raw.comm}</div>` : ''}
@@ -182,9 +187,10 @@ function renderSheet() {
 window.selectPath = (idx) => { 
     activePathIdx = idx; 
     renderSheet(); 
-    sendLogAction(`Выбрал маршрут ${idx + 1} на точке ${activePointId}`);
+    sendLogAction(`Выбрал путь №${idx + 1} на точке ${activePointId}`);
 };
 
+/** UI HELPERS **/
 function setupMenu(data) {
     const presentColors = new Set(data.map(d => d.color));
     const items = ['all', ...Object.keys(COLOR_LABELS).filter(c => c !== 'all' && presentColors.has(c))];
@@ -223,27 +229,20 @@ window.toggleExpand = (idx) => { expandedPathIdx = (expandedPathIdx === idx) ? -
 window.toggleComm = (idx) => { openCommIdx = (openCommIdx === idx) ? -1 : idx; renderSheet(); };
 function toggleAutoCenter() { isAutoCenter = !isAutoCenter; els.locateBtn.classList.toggle('active', isAutoCenter); }
 
+/** SVG & MATH **/
 const getSvg = (col, txt, az, isEnd) => {
-    const sTxt = String(txt);
-    const hasBang = sTxt.includes('!');
-    const mainText = sTxt.replace('!', '');
+    const sTxt = String(txt), hasBang = sTxt.includes('!'), mainText = sTxt.replace('!', '');
     if (isEnd) {
         return 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="34" height="34">
-            <g transform="rotate(${az},17,17)">
-                <polygon points="17,2 25,32 17,24 9,32" fill="${col}" stroke="white" stroke-width="1.5"/>
-            </g>
+            <g transform="rotate(${az},17,17)"><polygon points="17,2 25,32 17,24 9,32" fill="${col}" stroke="white" stroke-width="1.5"/></g>
             <circle cx="17" cy="17" r="7" fill="${col}" stroke="white" stroke-width="1"/>
-            <text x="17" y="20.5" font-size="9" font-family="Arial" font-weight="bold" text-anchor="middle" fill="#000" stroke="white" stroke-width="2" style="paint-order:stroke fill;stroke-linejoin:round">${mainText}</text>
-        </svg>`);
+            <text x="17" y="20.5" font-size="9" font-family="Arial" font-weight="bold" text-anchor="middle" fill="#000" stroke="white" stroke-width="2" style="paint-order:stroke fill;stroke-linejoin:round">${mainText}</text></svg>`);
     } else {
         return 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="56" height="40">
-            <g transform="rotate(${az},20,20)">
-                <polygon points="20,2 30,35 20,26 10,35" fill="${col}" stroke="#000" stroke-width="1.5"/>
-            </g>
+            <g transform="rotate(${az},20,20)"><polygon points="20,2 30,35 20,26 10,35" fill="${col}" stroke="#000" stroke-width="1.5"/></g>
             <circle cx="20" cy="20" r="9" fill="${col}" stroke="#000" stroke-width="1"/>
             <text x="20" y="24" font-size="11" font-family="Arial" font-weight="900" text-anchor="middle" fill="#000" stroke="white" stroke-width="2" style="paint-order:stroke fill;stroke-linejoin:round">${mainText}</text>
-            ${hasBang ? `<text x="30" y="24" font-size="20" font-family="Arial" font-weight="900" fill="red" stroke="white" stroke-width="3" style="paint-order:stroke fill;stroke-linejoin:round">!</text>` : ''}
-        </svg>`);
+            ${hasBang ? `<text x="30" y="24" font-size="20" font-family="Arial" font-weight="900" fill="red" stroke="white" stroke-width="3" style="paint-order:stroke fill;stroke-linejoin:round">!</text>` : ''}</svg>`);
     }
 };
 
