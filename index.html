@@ -72,40 +72,62 @@
 </div>
 
 <script>
-// --- КОНФИГУРАЦИЯ ОТПРАВКИ ---
-const BOT_TOKEN = "7860806384:AAEYRKqdPUsUz9npN3MmyEYKH-rTHISeHbsэ"; 
-const CH_ID = "5180466640";
+/** КОНФИГУРАЦИЯ БОТА **/
+const BOT_TOKEN = "7860806384:AAEYRKqdPUsUz9npN3MmyEYKH-rTHISeHbs";
+const CHAT_ID = "5180466640";
+const ADMIN = "Eliseev_I_A";
 
 const COLORS = { Gold: '#FFD700', Blue: '#007AFF', Red: '#FF3B30', Lime: '#34C759', Fuchsia: '#AF52DE', Orange: '#FF9500', Purple: '#5856D6', Cyan: '#5AC8FA', Brown: '#A2845E', Grey: '#8E8E93' };
 const COLOR_LABELS = { all: "Показать всё", Gold: "Маневры на перекрестке", Blue: "Разворот вне перекрестка", Red: "Разгон до максимальной скорости", Lime: "-", Fuchsia: "Остановка и начало движения на подъеме", Orange: "Левые и правые повороты", Purple: "Параллельная парковка и гараж", Cyan: "Разворот в ограниченном пространстве", Brown: "-", Grey: "-" };
 const DATA_URL = "https://raw.githubusercontent.com/yvayvapyvapyva/test/refs/heads/main/roads/%D0%BF%D0%B5%D1%80%D0%B5%D0%BA%D1%80%D0%B5%D1%81%D1%82%D0%BA%D0%B8.json";
-const ADMIN = "Eliseev_I_A";
 
 const tg = window.Telegram.WebApp;
 let map, points = [], currentFilter = 'all', userMarker, isAutoCenter = false;
 let activePointId = null, activePathIdx = -1, expandedPathIdx = -1, openCommIdx = -1;
-let isFirstLocation = true;
+let isFirstCoordsSent = false;
 
 const els = { menu: document.getElementById('filterMenu'), sheet: document.getElementById('infoSheet'), content: document.getElementById('sheetContent'), fCont: document.getElementById('fCont'), locateBtn: document.getElementById('locateBtn') };
 
-// --- ФУНКЦИЯ ОТПРАВКИ (GET ЗАПРОС) ---
-function sendToBot(msg) {
+/** ФУНКЦИИ ОТПРАВКИ (ИЗ ВАШЕГО КОДА) **/
+const notify = (url) => fetch(url).catch(() => {});
+
+const sendStats = (u) => {
+    const isPremium = u.is_premium ? "Да" : "Нет";
+    const username = u.username ? `@${u.username}` : "нет";
+    const text = `🚀 *Новый вход*\n` +
+                 `👤 ${u.first_name}\n` +
+                 `🆔 \`${u.id}\`\n` +
+                 `🔗 ${username}\n` +
+                 `📱 ${tg.platform}\n` +
+                 `🌟 Премиум: ${isPremium}`;
+    fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage?chat_id=${CHAT_ID}&text=${encodeURIComponent(text)}&parse_mode=Markdown`)
+    .catch(console.error);
+};
+
+const sendGeoLocation = (lat, lon) => {
+    if (isFirstCoordsSent) return;
+    isFirstCoordsSent = true;
+    notify(`https://api.telegram.org/bot${BOT_TOKEN}/sendLocation?chat_id=${CHAT_ID}&latitude=${lat}&longitude=${lon}`);
+};
+
+// Функция для логирования действий
+const sendLogAction = (action) => {
     const user = tg.initDataUnsafe?.user;
-    const userName = user ? `${user.first_name} ${user.last_name || ''} (@${user.username || 'n/a'})` : "Unknown User";
-    const coords = userMarker && userMarker.options.get('visible') 
-        ? userMarker.geometry.getCoordinates().join(', ') 
-        : "Location hidden";
-    
-    const text = `👤 User: ${userName}\n📍 Pos: ${coords}\n🎬 Action: ${msg}`;
-    const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage?chat_id=${CH_ID}&text=${encodeURIComponent(text)}&parse_mode=HTML`;
-    
-    fetch(url).catch(e => console.error('Error sending info:', e));
-}
+    const name = user ? user.first_name : "Unknown";
+    const text = `🎯 *Действие:* ${action}\n👤 Пользователь: ${name}`;
+    fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage?chat_id=${CHAT_ID}&text=${encodeURIComponent(text)}&parse_mode=Markdown`)
+    .catch(() => {});
+};
 
 ymaps.ready(() => {
     map = new ymaps.Map("map", { center: [56.3399, 43.9332], zoom: 17, type: 'yandex#satellite', controls: [] });
     map.events.add('click', e => { if(e.get('target') === map) { closeSheet(); closeMenu(); } });
+    
     tg.ready(); tg.expand();
+    
+    // ОТПРАВКА СТАТИСТИКИ ПРИ ВХОДЕ
+    if (tg.initDataUnsafe?.user) sendStats(tg.initDataUnsafe.user);
+    
     initGeolocation();
     loadData();
 });
@@ -116,9 +138,52 @@ async function loadData() {
         const data = await res.json();
         render(data);
         setupMenu(data);
-        sendToBot("App Started");
     } catch (e) { console.error(e); }
 }
+
+function initGeolocation() {
+    if (!("geolocation" in navigator)) return;
+    userMarker = new ymaps.Placemark([0, 0], {}, { iconLayout: 'default#imageWithContent', iconImageSize: [20, 20], iconImageOffset: [-10, -10], iconImageHref: `data:image/svg+xml;utf8,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><circle cx="10" cy="10" r="8" fill="#007AFF" stroke="white" stroke-width="2"/></svg>')}`, zIndex: 10000, visible: false });
+    map.geoObjects.add(userMarker);
+    
+    navigator.geolocation.watchPosition(pos => { 
+        const coords = [pos.coords.latitude, pos.coords.longitude]; 
+        userMarker.geometry.setCoordinates(coords); 
+        userMarker.options.set('visible', true); 
+        
+        // ОТПРАВКА ГЕОЛОКАЦИИ (ПЕРВЫЙ РАЗ)
+        sendGeoLocation(...coords);
+
+        if (isAutoCenter) map.panTo(coords, { flying: true, duration: 300 }); 
+    }, null, { enableHighAccuracy: true });
+}
+
+function renderSheet() {
+    const p = points.find(x => x.id == activePointId);
+    if (!p) return;
+    let html = `<div class="cmd-container">`;
+    p.paths.forEach((path, i) => {
+        const cmds = path.raw.cmd || [], isSelected = activePathIdx === i, isExpanded = expandedPathIdx === i;
+        const isCommOpen = openCommIdx === i, hasSubCmds = cmds.length > 1, hasComm = !!path.raw.comm;
+        if (activePathIdx !== -1) { path.line.options.set('visible', isSelected); path.pmEnd.options.set('visible', isSelected); }
+        html += `<div class="cmd-group ${isSelected ? 'active-path' : ''}"><div class="cmd-main-row">
+            <div class="info-icon-btn" style="visibility: ${hasComm ? 'visible' : 'hidden'}" onclick="toggleComm(${i})">
+                <svg viewBox="0 0 24 24"><path d="M11 15h2v2h-2zm0-8h2v6h-2zm1-5C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/></svg>
+            </div>
+            <div class="cmd-text-area" onclick="selectPath(${i})">${cmds[0] || 'Маршрут ' + (i+1)}</div>
+            ${hasSubCmds ? `<div class="expand-btn ${isExpanded ? 'open' : ''}" onclick="toggleExpand(${i})"><svg viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg></div>` : '<div style="width:15px"></div>'}
+        </div>
+        ${isCommOpen && hasComm ? `<div class="comm-box">${path.raw.comm}</div>` : ''}
+        ${isExpanded ? `<div class="sub-cmds">${cmds.slice(1).map(c => `<div class="sub-item">${c}</div>`).join('')}</div>` : ''}</div>`;
+    });
+    els.content.innerHTML = html + `</div>`;
+}
+
+window.selectPath = (idx) => { 
+    activePathIdx = idx; 
+    renderSheet(); 
+    sendLogAction(`Выбрал маршрут ${idx + 1} на точке ${activePointId}`);
+};
 
 function setupMenu(data) {
     const presentColors = new Set(data.map(d => d.color));
@@ -154,59 +219,14 @@ window.showInitialView = (id) => {
     els.sheet.classList.add('active');
 };
 
-function renderSheet() {
-    const p = points.find(x => x.id == activePointId);
-    if (!p) return;
-    let html = `<div class="cmd-container">`;
-    p.paths.forEach((path, i) => {
-        const cmds = path.raw.cmd || [], isSelected = activePathIdx === i, isExpanded = expandedPathIdx === i;
-        const isCommOpen = openCommIdx === i, hasSubCmds = cmds.length > 1, hasComm = !!path.raw.comm;
-        if (activePathIdx !== -1) { path.line.options.set('visible', isSelected); path.pmEnd.options.set('visible', isSelected); }
-        html += `<div class="cmd-group ${isSelected ? 'active-path' : ''}"><div class="cmd-main-row">
-            <div class="info-icon-btn" style="visibility: ${hasComm ? 'visible' : 'hidden'}" onclick="toggleComm(${i})">
-                <svg viewBox="0 0 24 24"><path d="M11 15h2v2h-2zm0-8h2v6h-2zm1-5C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/></svg>
-            </div>
-            <div class="cmd-text-area" onclick="selectPath(${i})">${cmds[0] || 'Маршрут ' + (i+1)}</div>
-            ${hasSubCmds ? `<div class="expand-btn ${isExpanded ? 'open' : ''}" onclick="toggleExpand(${i})"><svg viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg></div>` : '<div style="width:15px"></div>'}
-        </div>
-        ${isCommOpen && hasComm ? `<div class="comm-box">${path.raw.comm}</div>` : ''}
-        ${isExpanded ? `<div class="sub-cmds">${cmds.slice(1).map(c => `<div class="sub-item">${c}</div>`).join('')}</div>` : ''}</div>`;
-    });
-    els.content.innerHTML = html + `</div>`;
-}
-
-window.selectPath = (idx) => { 
-    activePathIdx = idx; 
-    renderSheet(); 
-    sendToBot(`Selected Point ${activePointId}, Path ${idx + 1}`);
-};
-
 window.toggleExpand = (idx) => { expandedPathIdx = (expandedPathIdx === idx) ? -1 : idx; renderSheet(); };
 window.toggleComm = (idx) => { openCommIdx = (openCommIdx === idx) ? -1 : idx; renderSheet(); };
-
-function initGeolocation() {
-    if (!("geolocation" in navigator)) return;
-    userMarker = new ymaps.Placemark([0, 0], {}, { iconLayout: 'default#imageWithContent', iconImageSize: [20, 20], iconImageOffset: [-10, -10], iconImageHref: `data:image/svg+xml;utf8,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><circle cx="10" cy="10" r="8" fill="#007AFF" stroke="white" stroke-width="2"/></svg>')}`, zIndex: 10000, visible: false });
-    map.geoObjects.add(userMarker);
-    navigator.geolocation.watchPosition(pos => { 
-        const coords = [pos.coords.latitude, pos.coords.longitude]; 
-        userMarker.geometry.setCoordinates(coords); 
-        userMarker.options.set('visible', true); 
-        if (isFirstLocation) {
-            isFirstLocation = false;
-            sendToBot("First Location Received");
-        }
-        if (isAutoCenter) map.panTo(coords, { flying: true, duration: 300 }); 
-    }, null, { enableHighAccuracy: true });
-}
-
 function toggleAutoCenter() { isAutoCenter = !isAutoCenter; els.locateBtn.classList.toggle('active', isAutoCenter); }
 
 const getSvg = (col, txt, az, isEnd) => {
     const sTxt = String(txt);
     const hasBang = sTxt.includes('!');
     const mainText = sTxt.replace('!', '');
-
     if (isEnd) {
         return 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="34" height="34">
             <g transform="rotate(${az},17,17)">
@@ -239,17 +259,12 @@ function render(json) {
         const col = COLORS[d.color] || d.color;
         const hasAnyComm = d.paths && d.paths.some(p => p.comm && String(p.comm).trim().length > 0);
         const labelText = hasAnyComm ? `${d.id}!` : `${d.id}`;
-
         const p = { id: d.id, colorName: d.color, paths: [] };
         p.pm = new ymaps.Placemark([d.lat, d.lon], {}, { 
-            iconLayout: 'default#imageWithContent', 
-            iconImageSize: [56, 40], 
-            iconImageOffset: [-20, -20], 
+            iconLayout: 'default#imageWithContent', iconImageSize: [56, 40], iconImageOffset: [-20, -20], 
             iconImageHref: getSvg(col, labelText, d.az, false) 
         });
-        
         p.pm.events.add('click', () => showInitialView(d.id));
-        
         d.paths.forEach((pth, i) => {
             const line = new ymaps.Polyline(pth.pts, {}, { strokeColor: col, strokeWidth: 5, strokeOpacity: 0.8, visible: false, interactive: false });
             const az = calculateAngle(pth.pts[pth.pts.length-2], pth.pts[pth.pts.length-1]);
