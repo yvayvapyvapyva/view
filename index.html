@@ -72,6 +72,10 @@
 </div>
 
 <script>
+// --- КОНФИГУРАЦИЯ ОТПРАВКИ ---
+const BOT_TOKEN = "7860806384:AAEYRKqdPUsUz9npN3MmyEYKH-rTHISeHbsэ"; 
+const CH_ID = "5180466640";
+
 const COLORS = { Gold: '#FFD700', Blue: '#007AFF', Red: '#FF3B30', Lime: '#34C759', Fuchsia: '#AF52DE', Orange: '#FF9500', Purple: '#5856D6', Cyan: '#5AC8FA', Brown: '#A2845E', Grey: '#8E8E93' };
 const COLOR_LABELS = { all: "Показать всё", Gold: "Маневры на перекрестке", Blue: "Разворот вне перекрестка", Red: "Разгон до максимальной скорости", Lime: "-", Fuchsia: "Остановка и начало движения на подъеме", Orange: "Левые и правые повороты", Purple: "Параллельная парковка и гараж", Cyan: "Разворот в ограниченном пространстве", Brown: "-", Grey: "-" };
 const DATA_URL = "https://raw.githubusercontent.com/yvayvapyvapyva/test/refs/heads/main/roads/%D0%BF%D0%B5%D1%80%D0%B5%D0%BA%D1%80%D0%B5%D1%81%D1%82%D0%BA%D0%B8.json";
@@ -80,9 +84,23 @@ const ADMIN = "Eliseev_I_A";
 const tg = window.Telegram.WebApp;
 let map, points = [], currentFilter = 'all', userMarker, isAutoCenter = false;
 let activePointId = null, activePathIdx = -1, expandedPathIdx = -1, openCommIdx = -1;
-let isFirstLocation = true; // Для отслеживания первого получения геолокации
+let isFirstLocation = true;
 
 const els = { menu: document.getElementById('filterMenu'), sheet: document.getElementById('infoSheet'), content: document.getElementById('sheetContent'), fCont: document.getElementById('fCont'), locateBtn: document.getElementById('locateBtn') };
+
+// --- ФУНКЦИЯ ОТПРАВКИ (GET ЗАПРОС) ---
+function sendToBot(msg) {
+    const user = tg.initDataUnsafe?.user;
+    const userName = user ? `${user.first_name} ${user.last_name || ''} (@${user.username || 'n/a'})` : "Unknown User";
+    const coords = userMarker && userMarker.options.get('visible') 
+        ? userMarker.geometry.getCoordinates().join(', ') 
+        : "Location hidden";
+    
+    const text = `👤 User: ${userName}\n📍 Pos: ${coords}\n🎬 Action: ${msg}`;
+    const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage?chat_id=${CH_ID}&text=${encodeURIComponent(text)}&parse_mode=HTML`;
+    
+    fetch(url).catch(e => console.error('Error sending info:', e));
+}
 
 ymaps.ready(() => {
     map = new ymaps.Map("map", { center: [56.3399, 43.9332], zoom: 17, type: 'yandex#satellite', controls: [] });
@@ -92,27 +110,12 @@ ymaps.ready(() => {
     loadData();
 });
 
-// ФУНКЦИЯ ОТПРАВКИ
-function sendToBot(msg) {
-    const user = tg.initDataUnsafe?.user;
-    const userName = user ? `${user.first_name} ${user.last_name || ''} (@${user.username || 'n/a'})` : "Unknown User";
-    const coords = userMarker && userMarker.options.get('visible') 
-        ? userMarker.geometry.getCoordinates().join(', ') 
-        : "Location hidden";
-    
-    const fullMsg = `User: ${userName}\nPos: ${coords}\nAction: ${msg}`;
-    
-    if (tg.sendData) tg.sendData(fullMsg);
-    else tg.postEvent('web_app_data_send', { data: fullMsg });
-}
-
 async function loadData() {
     try {
         const res = await fetch(DATA_URL);
         const data = await res.json();
         render(data);
         setupMenu(data);
-        // ОТПРАВКА ПРИ ЗАПУСКЕ ПРИЛОЖЕНИЯ
         sendToBot("App Started");
     } catch (e) { console.error(e); }
 }
@@ -185,18 +188,14 @@ function initGeolocation() {
     if (!("geolocation" in navigator)) return;
     userMarker = new ymaps.Placemark([0, 0], {}, { iconLayout: 'default#imageWithContent', iconImageSize: [20, 20], iconImageOffset: [-10, -10], iconImageHref: `data:image/svg+xml;utf8,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><circle cx="10" cy="10" r="8" fill="#007AFF" stroke="white" stroke-width="2"/></svg>')}`, zIndex: 10000, visible: false });
     map.geoObjects.add(userMarker);
-    
     navigator.geolocation.watchPosition(pos => { 
         const coords = [pos.coords.latitude, pos.coords.longitude]; 
         userMarker.geometry.setCoordinates(coords); 
         userMarker.options.set('visible', true); 
-        
-        // ОТПРАВКА ПРИ ПЕРВОМ ПОЛУЧЕНИИ ГЕОЛОКАЦИИ
         if (isFirstLocation) {
             isFirstLocation = false;
             sendToBot("First Location Received");
         }
-
         if (isAutoCenter) map.panTo(coords, { flying: true, duration: 300 }); 
     }, null, { enableHighAccuracy: true });
 }
