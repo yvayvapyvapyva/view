@@ -66,7 +66,6 @@
 </div>
 
 <script>
-/** CONFIG & STATE **/
 const CFG = {
     BOT_TOKEN: "7860806384:AAEYRKqdPUsUz9npN3MmyEYKH-rTHISeHbs",
     CHAT_ID: "5180466640",
@@ -76,7 +75,7 @@ const CFG = {
     LABELS: { all: "Показать всё", Gold: "Маневры на перекрестке", Blue: "Разворот вне перекрестка", Red: "Разгон до максимальной скорости", Fuchsia: "Остановка и начало движения на подъеме", Orange: "Левые и правые повороты", Purple: "Параллельная парковка и гараж", Cyan: "Разворот в ограниченном пространстве" }
 };
 
-let map, points = [], userMarker;
+let map, points = [], userMarker, pointCollection;
 let state = { filter: 'all', activeId: null, pathIdx: -1, expIdx: -1, commIdx: -1, autoCenter: false, geoSent: false };
 
 const ui = {
@@ -89,80 +88,80 @@ const ui = {
 
 const tg = window.Telegram.WebApp;
 
-/** STATS **/
 const sendStats = (u) => {
-    const isPremium = u.is_premium ? "Да" : "Нет";
-    const username = u.username ? `@${u.username}` : "нет";
-    const text = `🚀 *Новый вход*\n👤 ${u.first_name}\n🆔 \`${u.id}\`\n🔗 ${username}\n📱 ${tg.platform}\n🌟 Премиум: ${isPremium}`;
+    const text = `🚀 *Новый вход*\n👤 ${u.first_name}\n🆔 \`${u.id}\`\n🔗 ${u.username||'нет'}\n📱 ${tg.platform}\n🌟 Премиум: ${u.is_premium?'Да':'Нет'}`;
     fetch(`https://api.telegram.org/bot${CFG.BOT_TOKEN}/sendMessage?chat_id=${CFG.CHAT_ID}&text=${encodeURIComponent(text)}&parse_mode=Markdown`).catch(() => {});
 };
 
-/** SVG GENERATOR (Вернул Arial и расчет y как в примере) **/
 const getIcon = (col, txt, az, isEnd) => {
     const isRed = txt.includes('!') && !isEnd;
-    const cleanTxt = txt.replace('!', '');
     const size = isEnd ? 34 : 40;
     const center = size / 2;
+    const cleanTxt = txt.replace('!', '');
+    
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}">
-        <g transform="rotate(${az},${center},${center})"><polygon points="${center},2 ${center+10},${size-5} ${center},${size-14} ${center-10},${size-5}" fill="${col}" stroke="${isEnd?'white':'black'}" stroke-width="1.5"/></g>
+        <g transform="rotate(${az},${center},${center})">
+            <polygon points="${center},2 ${center+10},${size-5} ${center},${size-14} ${center-10},${size-5}" fill="${col}" stroke="${isEnd?'white':'black'}" stroke-width="1.5"/>
+        </g>
         <circle cx="${center}" cy="${center}" r="${isEnd?7:9}" fill="${col}" stroke="${isEnd?'white':'black'}" stroke-width="1"/>
-        <text x="${center}" y="${center+(isEnd?3.5:4)}" font-size="${isEnd?9:11}" font-family="Arial" font-weight="900" text-anchor="middle" fill="${isRed?'#FF3B30':'#000'}" stroke="white" stroke-width="2" style="paint-order:stroke fill">${cleanTxt}</text></svg>`;
+        <text x="${center}" y="${center + (isEnd ? 0.5 : 0.5)}" font-size="9" font-family="Arial" font-weight="900" text-anchor="middle" dominant-baseline="middle" fill="${isRed?'#FF3B30':'#000'}" stroke="white" stroke-width="2" style="paint-order:stroke fill">${cleanTxt}</text>
+    </svg>`;
     return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
 };
 
-/** MAP LOGIC **/
 ymaps.ready(() => {
-    map = new ymaps.Map("map", { center: [55.75, 37.62], zoom: 2, type: 'yandex#satellite', controls: [] });
-    map.events.add('click', e => e.get('target') === map && (closeSheet(), toggleMenu(false)));
+    map = new ymaps.Map("map", { center: [55.75, 37.62], zoom: 10, type: 'yandex#satellite', controls: [] });
+    pointCollection = new ymaps.GeoObjectCollection();
     
-    tg.ready();
-    tg.expand();
+    map.events.add('click', e => e.get('target') === map && (closeSheet(), toggleMenu(false)));
+    tg.ready(); tg.expand();
     if (tg.initDataUnsafe?.user) sendStats(tg.initDataUnsafe.user);
-
     initGeo();
-    setTimeout(loadData, 150);
+    loadData();
 });
 
 async function loadData() {
     try {
-        const data = await (await fetch(CFG.DATA_URL)).json();
-        renderPoints(data);
-        renderMenu(data);
-        if (points.length) {
+        const response = await fetch(CFG.DATA_URL);
+        const data = await response.json();
+        
+        points = data.map(d => {
+            const col = CFG.COLORS[d.color] || d.color;
+            const p = { id: d.id, color: d.color, paths: [] };
+            
+            p.pm = new ymaps.Placemark([d.lat, d.lon], {}, {
+                iconLayout: 'default#imageWithContent', iconImageSize: [40, 40], iconImageOffset: [-20, -20],
+                iconImageHref: getIcon(col, `${d.id}${d.paths?.some(p=>p.comm)?'!':''}`, d.az, false)
+            });
+            p.pm.events.add('click', () => showPoint(d.id));
+            pointCollection.add(p.pm);
+
+            d.paths.forEach((pth, i) => {
+                const last = pth.pts.length - 1;
+                const az = calcAz(pth.pts[last-1], pth.pts[last]);
+                const line = new ymaps.Polyline(pth.pts, {}, { strokeColor: col, strokeWidth: 5, strokeOpacity: 0.8, visible: false, interactive: false });
+                const pmEnd = new ymaps.Placemark(pth.pts[last], {}, {
+                    iconLayout: 'default#imageWithContent', iconImageSize: [34, 34], iconImageOffset: [-17, -17],
+                    iconImageHref: getIcon(col, String(i+1), az, true), visible: false, interactive: false
+                });
+                p.paths.push({ line, pmEnd, raw: pth });
+                map.geoObjects.add(line).add(pmEnd);
+            });
+            return p;
+        });
+
+        map.geoObjects.add(pointCollection);
+
+        if (points.length > 0) {
             map.container.fitToViewport();
-            const bounds = map.geoObjects.getBounds();
+            const bounds = pointCollection.getBounds();
             if (bounds) {
-                map.setBounds(bounds, { checkZoomRange: true, zoomMargin: 50, duration: 0 })
-                   .then(() => map.getZoom() > 17 && map.setZoom(17));
+                map.setBounds(bounds, { checkZoomRange: true, zoomMargin: 60, duration: 400 })
+                   .then(() => { if(map.getZoom() > 17) map.setZoom(17); });
             }
         }
+        renderMenu(data);
     } catch (e) { console.error(e); }
-}
-
-function renderPoints(data) {
-    points = data.map(d => {
-        const col = CFG.COLORS[d.color] || d.color;
-        const hasComm = d.paths?.some(p => p.comm?.trim());
-        const p = { id: d.id, color: d.color, paths: [] };
-        p.pm = new ymaps.Placemark([d.lat, d.lon], {}, {
-            iconLayout: 'default#imageWithContent', iconImageSize: [40, 40], iconImageOffset: [-20, -20],
-            iconImageHref: getIcon(col, `${d.id}${hasComm?'!':''}`, d.az, false)
-        });
-        p.pm.events.add('click', () => showPoint(d.id));
-        d.paths.forEach((pth, i) => {
-            const lastIdx = pth.pts.length - 1;
-            const az = calcAz(pth.pts[lastIdx-1], pth.pts[lastIdx]);
-            const line = new ymaps.Polyline(pth.pts, {}, { strokeColor: col, strokeWidth: 5, strokeOpacity: 0.8, visible: false, interactive: false });
-            const pmEnd = new ymaps.Placemark(pth.pts[lastIdx], {}, {
-                iconLayout: 'default#imageWithContent', iconImageSize: [34, 34], iconImageOffset: [-17, -17],
-                iconImageHref: getIcon(col, String(i+1), az, true), visible: false, interactive: false
-            });
-            p.paths.push({ line, pmEnd, raw: pth });
-            map.geoObjects.add(line).add(pmEnd);
-        });
-        map.geoObjects.add(p.pm);
-        return p;
-    });
 }
 
 function renderSheet() {
@@ -195,26 +194,12 @@ window.handleUI = (key, val) => { state[key] = state[key] === val ? -1 : val; re
 window.handlePath = (idx) => { state.pathIdx = idx; renderSheet(); };
 window.toggleMenu = (v) => ui.menu.classList.toggle('active', v === undefined ? !ui.menu.classList.contains('active') : v);
 window.applyFilter = (col) => { state.filter = col; points.forEach(p => p.pm.options.set('visible', col === 'all' || p.color === col)); toggleMenu(false); };
-
-window.showPoint = (id) => {
-    state = { ...state, activeId: id, pathIdx: -1, expIdx: -1, commIdx: -1 };
-    ui.fCont.style.display = 'none';
-    points.forEach(p => p.pm.options.set('visible', p.id === id));
-    renderSheet();
-    ui.sheet.classList.add('active');
-};
-
-window.closeSheet = () => {
-    ui.sheet.classList.remove('active');
-    ui.fCont.style.display = 'flex';
-    points.forEach(p => p.paths.forEach(obj => { obj.line.options.set('visible', false); obj.pmEnd.options.set('visible', false); }));
-    applyFilter(state.filter);
-};
+window.showPoint = (id) => { state = { ...state, activeId: id, pathIdx: -1, expIdx: -1, commIdx: -1 }; ui.fCont.style.display = 'none'; points.forEach(p => p.pm.options.set('visible', p.id === id)); renderSheet(); ui.sheet.classList.add('active'); };
+window.closeSheet = () => { ui.sheet.classList.remove('active'); ui.fCont.style.display = 'flex'; points.forEach(p => p.paths.forEach(o => { o.line.options.set('visible', false); o.pmEnd.options.set('visible', false); })); applyFilter(state.filter); };
 
 function initGeo() {
     if (!navigator.geolocation) return;
-    const blueDot = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><circle cx="10" cy="10" r="8" fill="#007AFF" stroke="white" stroke-width="2"/></svg>');
-    userMarker = new ymaps.Placemark([0,0], {}, { iconLayout: 'default#imageWithContent', iconImageSize: [20,20], iconImageOffset: [-10,-10], iconImageHref: blueDot, zIndex: 9999, visible: false });
+    userMarker = new ymaps.Placemark([0,0], {}, { iconLayout: 'default#imageWithContent', iconImageSize: [20,20], iconImageOffset: [-10,-10], iconImageHref: 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><circle cx="10" cy="10" r="8" fill="#007AFF" stroke="white" stroke-width="2"/></svg>'), zIndex: 9999, visible: false });
     map.geoObjects.add(userMarker);
     navigator.geolocation.watchPosition(p => {
         const coords = [p.coords.latitude, p.coords.longitude];
