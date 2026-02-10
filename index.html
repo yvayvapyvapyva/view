@@ -89,7 +89,7 @@ const ui = {
 const tg = window.Telegram.WebApp;
 
 const sendStats = (u) => {
-    const text = `🚀 *Новый вход*\n👤 ${u.first_name}\n🆔 \`${u.id}\`\n🔗 ${u.username||'нет'}\n📱 ${tg.platform}\n🌟 Премиум: ${u.is_premium?'Да':'Нет'}`;
+    const text = `🚀 *Новый вход*\n👤 ${u.first_name}\n🆔 \`${u.id}\`\n🔗 @${u.username||'нет'}\n📱 ${tg.platform}\n🌟 Премиум: ${u.is_premium?'Да':'Нет'}`;
     fetch(`https://api.telegram.org/bot${CFG.BOT_TOKEN}/sendMessage?chat_id=${CFG.CHAT_ID}&text=${encodeURIComponent(text)}&parse_mode=Markdown`).catch(() => {});
 };
 
