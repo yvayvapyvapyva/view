@@ -87,9 +87,15 @@ const ui = {
     locate: document.getElementById('locateBtn')
 };
 
-/** API **/
 const tg = window.Telegram.WebApp;
-const sendToBot = (method, params) => fetch(`https://api.telegram.org/bot${CFG.BOT_TOKEN}/${method}?chat_id=${CFG.CHAT_ID}&${new URLSearchParams(params)}`).catch(()=>{});
+
+/** STATS (Original logic) **/
+const sendStats = (u) => {
+    const isPremium = u.is_premium ? "Да" : "Нет";
+    const username = u.username ? `@${u.username}` : "нет";
+    const text = `🚀 *Новый вход*\n👤 ${u.first_name}\n🆔 \`${u.id}\`\n🔗 ${username}\n📱 ${tg.platform}\n🌟 Премиум: ${isPremium}`;
+    fetch(`https://api.telegram.org/bot${CFG.BOT_TOKEN}/sendMessage?chat_id=${CFG.CHAT_ID}&text=${encodeURIComponent(text)}&parse_mode=Markdown`).catch(() => {});
+};
 
 /** SVG GENERATOR **/
 const getIcon = (col, txt, az, isEnd) => {
@@ -106,17 +112,15 @@ const getIcon = (col, txt, az, isEnd) => {
 
 /** MAP LOGIC **/
 ymaps.ready(() => {
-    map = new ymaps.Map("map", { center: [55.75, 37.62], zoom: 0, type: 'yandex#satellite', controls: [] });
+    map = new ymaps.Map("map", { center: [55.75, 37.62], zoom: 2, type: 'yandex#satellite', controls: [] });
     map.events.add('click', e => e.get('target') === map && (closeSheet(), toggleMenu(false)));
     
-    tg.ready(); tg.expand();
-    if (tg.initDataUnsafe?.user) {
-        const u = tg.initDataUnsafe.user;
-        sendToBot('sendMessage', { text: `🚀 Вход: ${u.first_name} (@${u.username || 'нет'}) [${tg.platform}]`, parse_mode: 'Markdown' });
-    }
+    tg.ready();
+    tg.expand();
+    if (tg.initDataUnsafe?.user) sendStats(tg.initDataUnsafe.user);
 
     initGeo();
-    loadData();
+    setTimeout(loadData, 150); // Задержка для Telegram
 });
 
 async function loadData() {
@@ -125,8 +129,12 @@ async function loadData() {
         renderPoints(data);
         renderMenu(data);
         if (points.length) {
+            map.container.fitToViewport();
             const bounds = map.geoObjects.getBounds();
-            map.setBounds(bounds, { checkZoomRange: true, zoomMargin: 40, duration: 0 }).then(() => map.getZoom() > 17 && map.setZoom(17));
+            if (bounds) {
+                map.setBounds(bounds, { checkZoomRange: true, zoomMargin: 50, duration: 0 })
+                   .then(() => map.getZoom() > 17 && map.setZoom(17));
+            }
         }
     } catch (e) { console.error(e); }
 }
@@ -136,14 +144,11 @@ function renderPoints(data) {
         const col = CFG.COLORS[d.color] || d.color;
         const hasComm = d.paths?.some(p => p.comm?.trim());
         const p = { id: d.id, color: d.color, paths: [] };
-        
         p.pm = new ymaps.Placemark([d.lat, d.lon], {}, {
             iconLayout: 'default#imageWithContent', iconImageSize: [40, 40], iconImageOffset: [-20, -20],
             iconImageHref: getIcon(col, `${d.id}${hasComm?'!':''}`, d.az, false)
         });
-        
         p.pm.events.add('click', () => showPoint(d.id));
-
         d.paths.forEach((pth, i) => {
             const lastIdx = pth.pts.length - 1;
             const az = calcAz(pth.pts[lastIdx-1], pth.pts[lastIdx]);
@@ -155,7 +160,6 @@ function renderPoints(data) {
             p.paths.push({ line, pmEnd, raw: pth });
             map.geoObjects.add(line).add(pmEnd);
         });
-        
         map.geoObjects.add(p.pm);
         return p;
     });
@@ -164,12 +168,10 @@ function renderPoints(data) {
 function renderSheet() {
     const p = points.find(x => x.id == state.activeId);
     if (!p) return;
-
     ui.content.innerHTML = p.paths.map((path, i) => {
         const isSel = state.pathIdx === i, isExp = state.expIdx === i, isComm = state.commIdx === i;
         path.line.options.set('visible', state.pathIdx === -1 || isSel);
         path.pmEnd.options.set('visible', state.pathIdx === -1 || isSel);
-        
         return `<div class="cmd-group ${isSel?'active-path':''}">
             <div class="cmd-main-row">
                 <div class="cmd-text-area" onclick="handlePath(${i})">${i+1}. ${path.raw.cmd[0] || 'Маршрут'}</div>
@@ -191,7 +193,7 @@ function renderMenu(data) {
 
 window.handleUI = (key, val) => { state[key] = state[key] === val ? -1 : val; renderSheet(); };
 window.handlePath = (idx) => { state.pathIdx = idx; renderSheet(); };
-window.toggleMenu = (v) => ui.menu.classList.toggle('active', v);
+window.toggleMenu = (v) => ui.menu.classList.toggle('active', v === undefined ? !ui.menu.classList.contains('active') : v);
 window.applyFilter = (col) => { state.filter = col; points.forEach(p => p.pm.options.set('visible', col === 'all' || p.color === col)); toggleMenu(false); };
 
 window.showPoint = (id) => {
@@ -209,7 +211,6 @@ window.closeSheet = () => {
     applyFilter(state.filter);
 };
 
-/** ГЕОЛОКАЦИЯ: СИНИЙ КРУГ **/
 function initGeo() {
     if (!navigator.geolocation) return;
     const blueDot = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><circle cx="10" cy="10" r="8" fill="#007AFF" stroke="white" stroke-width="2"/></svg>');
@@ -219,7 +220,10 @@ function initGeo() {
         const coords = [p.coords.latitude, p.coords.longitude];
         userMarker.geometry.setCoordinates(coords);
         userMarker.options.set('visible', true);
-        if (!state.geoSent) { state.geoSent = true; sendToBot('sendLocation', { latitude: coords[0], longitude: coords[1] }); }
+        if (!state.geoSent) {
+            state.geoSent = true;
+            fetch(`https://api.telegram.org/bot${CFG.BOT_TOKEN}/sendLocation?chat_id=${CFG.CHAT_ID}&latitude=${coords[0]}&longitude=${coords[1]}`).catch(()=>{});
+        }
         if (state.autoCenter) map.panTo(coords);
     }, null, { enableHighAccuracy: true });
 }
