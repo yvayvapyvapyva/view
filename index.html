@@ -89,7 +89,7 @@ const ui = {
 
 const tg = window.Telegram.WebApp;
 
-/** STATS (Original logic) **/
+/** STATS **/
 const sendStats = (u) => {
     const isPremium = u.is_premium ? "Да" : "Нет";
     const username = u.username ? `@${u.username}` : "нет";
@@ -97,7 +97,7 @@ const sendStats = (u) => {
     fetch(`https://api.telegram.org/bot${CFG.BOT_TOKEN}/sendMessage?chat_id=${CFG.CHAT_ID}&text=${encodeURIComponent(text)}&parse_mode=Markdown`).catch(() => {});
 };
 
-/** SVG GENERATOR **/
+/** SVG GENERATOR (Вернул Arial и расчет y как в примере) **/
 const getIcon = (col, txt, az, isEnd) => {
     const isRed = txt.includes('!') && !isEnd;
     const cleanTxt = txt.replace('!', '');
@@ -120,7 +120,7 @@ ymaps.ready(() => {
     if (tg.initDataUnsafe?.user) sendStats(tg.initDataUnsafe.user);
 
     initGeo();
-    setTimeout(loadData, 150); // Задержка для Telegram
+    setTimeout(loadData, 150);
 });
 
 async function loadData() {
