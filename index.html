@@ -104,7 +104,7 @@ const getIcon = (col, txt, az, isEnd) => {
             <polygon points="${center},2 ${center+10},${size-5} ${center},${size-14} ${center-10},${size-5}" fill="${col}" stroke="${isEnd?'white':'black'}" stroke-width="1.5"/>
         </g>
         <circle cx="${center}" cy="${center}" r="${isEnd?7:9}" fill="${col}" stroke="${isEnd?'white':'black'}" stroke-width="1"/>
-        <text x="${center}" y="${center + (isEnd ? 0.5 : 0.5)}" font-size="9" font-family="Arial" font-weight="900" text-anchor="middle" dominant-baseline="middle" fill="${isRed?'#FF3B30':'#000'}" stroke="white" stroke-width="2" style="paint-order:stroke fill">${cleanTxt}</text>
+        <text x="${center}" y="${center}" font-size="9" font-family="Arial" font-weight="900" text-anchor="middle" dominant-baseline="central" fill="${isRed?'#FF3B30':'#000'}" stroke="white" stroke-width="2" style="paint-order:stroke fill">${cleanTxt}</text>
     </svg>`;
     return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
 };
@@ -129,24 +129,29 @@ async function loadData() {
             const col = CFG.COLORS[d.color] || d.color;
             const p = { id: d.id, color: d.color, paths: [] };
             
+            // Проверка на наличие восклицательного знака (только если есть комментарий)
+            const hasComment = d.paths?.some(pth => pth.comm && pth.comm.trim() !== "");
+            
             p.pm = new ymaps.Placemark([d.lat, d.lon], {}, {
                 iconLayout: 'default#imageWithContent', iconImageSize: [40, 40], iconImageOffset: [-20, -20],
-                iconImageHref: getIcon(col, `${d.id}${d.paths?.some(p=>p.comm)?'!':''}`, d.az, false)
+                iconImageHref: getIcon(col, `${d.id}${hasComment?'!':''}`, d.az, false)
             });
             p.pm.events.add('click', () => showPoint(d.id));
             pointCollection.add(p.pm);
 
-            d.paths.forEach((pth, i) => {
-                const last = pth.pts.length - 1;
-                const az = calcAz(pth.pts[last-1], pth.pts[last]);
-                const line = new ymaps.Polyline(pth.pts, {}, { strokeColor: col, strokeWidth: 5, strokeOpacity: 0.8, visible: false, interactive: false });
-                const pmEnd = new ymaps.Placemark(pth.pts[last], {}, {
-                    iconLayout: 'default#imageWithContent', iconImageSize: [34, 34], iconImageOffset: [-17, -17],
-                    iconImageHref: getIcon(col, String(i+1), az, true), visible: false, interactive: false
+            if (d.paths) {
+                d.paths.forEach((pth, i) => {
+                    const last = pth.pts.length - 1;
+                    const az = calcAz(pth.pts[last-1], pth.pts[last]);
+                    const line = new ymaps.Polyline(pth.pts, {}, { strokeColor: col, strokeWidth: 5, strokeOpacity: 0.8, visible: false, interactive: false });
+                    const pmEnd = new ymaps.Placemark(pth.pts[last], {}, {
+                        iconLayout: 'default#imageWithContent', iconImageSize: [34, 34], iconImageOffset: [-17, -17],
+                        iconImageHref: getIcon(col, String(i+1), az, true), visible: false, interactive: false
+                    });
+                    p.paths.push({ line, pmEnd, raw: pth });
+                    map.geoObjects.add(line).add(pmEnd);
                 });
-                p.paths.push({ line, pmEnd, raw: pth });
-                map.geoObjects.add(line).add(pmEnd);
-            });
+            }
             return p;
         });
 
@@ -171,10 +176,14 @@ function renderSheet() {
         const isSel = state.pathIdx === i, isExp = state.expIdx === i, isComm = state.commIdx === i;
         path.line.options.set('visible', state.pathIdx === -1 || isSel);
         path.pmEnd.options.set('visible', state.pathIdx === -1 || isSel);
+        
+        const hasSubCmds = path.raw.cmd && path.raw.cmd.length > 1;
+        const mainCmd = (path.raw.cmd && path.raw.cmd[0]) ? path.raw.cmd[0] : `Маршрут ${i+1}`;
+
         return `<div class="cmd-group ${isSel?'active-path':''}">
             <div class="cmd-main-row">
-                <div class="cmd-text-area" onclick="handlePath(${i})">${i+1}. ${path.raw.cmd[0] || 'Маршрут'}</div>
-                ${path.raw.cmd.length > 1 ? `<div class="expand-btn ${isExp?'open':''}" onclick="handleUI('expIdx',${i})"><svg viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg></div>` : ''}
+                <div class="cmd-text-area" onclick="handlePath(${i})">${i+1}. ${mainCmd}</div>
+                ${hasSubCmds ? `<div class="expand-btn ${isExp?'open':''}" onclick="handleUI('expIdx',${i})"><svg viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg></div>` : ''}
                 ${path.raw.comm ? `<div class="info-icon-btn" onclick="handleUI('commIdx',${i})"><svg width="22" viewBox="0 0 24 24"><path d="M11 15h2v2h-2zm0-8h2v6h-2zm1-5C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z" fill="currentColor"/></svg></div>` : ''}
             </div>
             ${isComm ? `<div class="comm-box">${path.raw.comm}</div>` : ''}
