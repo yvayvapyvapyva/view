@@ -97,7 +97,15 @@ const getIcon = (col, txt, az, isEnd) => {
     const isRed = txt.includes('!') && !isEnd;
     const size = isEnd ? 34 : 40;
     const center = size / 2;
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}"><g transform="rotate(${az},${center},${center})"><polygon points="${center},2 ${center+10},${size-5} ${center},${size-14} ${center-10},${size-5}" fill="${col}" stroke="${isEnd?'white':'black'}" stroke-width="1.5"/></g><circle cx="${center}" cy="${center}" r="${isEnd?7:9}" fill="${col}" stroke="${isEnd?'white':'black'}" stroke-width="1"/><text x="${center}" y="${center}" font-size="9" font-family="Arial" font-weight="900" text-anchor="middle" dominant-baseline="central" fill="${isRed?'#FF3B30':'#000'}" stroke="white" stroke-width="2" style="paint-order:stroke fill">${txt.replace('!','')}</text></svg>`;
+    const cleanTxt = txt.replace('!', '');
+    
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}">
+        <g transform="rotate(${az},${center},${center})">
+            <polygon points="${center},2 ${center+10},${size-5} ${center},${size-14} ${center-10},${size-5}" fill="${col}" stroke="${isEnd?'white':'black'}" stroke-width="1.5"/>
+        </g>
+        <circle cx="${center}" cy="${center}" r="${isEnd?7:9}" fill="${col}" stroke="${isEnd?'white':'black'}" stroke-width="1"/>
+        <text x="${center}" y="${center}" font-size="9" font-family="Arial" font-weight="900" text-anchor="middle" dominant-baseline="central" fill="${isRed?'#FF3B30':'#000'}" stroke="white" stroke-width="2" style="paint-order:stroke fill">${cleanTxt}</text>
+    </svg>`;
     return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
 };
 
@@ -114,10 +122,13 @@ ymaps.ready(() => {
 
 async function loadData() {
     try {
-        const data = await (await fetch(CFG.DATA_URL)).json();
+        const response = await fetch(CFG.DATA_URL);
+        const data = await response.json();
+        
         points = data.map(d => {
             const col = CFG.COLORS[d.color] || d.color;
             const p = { id: d.id, color: d.color, paths: [] };
+            
             p.pm = new ymaps.Placemark([d.lat, d.lon], {}, {
                 iconLayout: 'default#imageWithContent', iconImageSize: [40, 40], iconImageOffset: [-20, -20],
                 iconImageHref: getIcon(col, `${d.id}${d.paths?.some(p=>p.comm)?'!':''}`, d.az, false)
@@ -141,16 +152,14 @@ async function loadData() {
 
         map.geoObjects.add(pointCollection);
 
-        // Логика перемещения в область всех точек
         if (points.length > 0) {
             map.container.fitToViewport();
             const bounds = pointCollection.getBounds();
             if (bounds) {
-                map.setBounds(bounds, { checkZoomRange: true, zoomMargin: 50, duration: 400 })
+                map.setBounds(bounds, { checkZoomRange: true, zoomMargin: 60, duration: 400 })
                    .then(() => { if(map.getZoom() > 17) map.setZoom(17); });
             }
         }
-
         renderMenu(data);
     } catch (e) { console.error(e); }
 }
