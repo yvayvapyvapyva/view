@@ -64,13 +64,19 @@
         }
         #infoSheet.active { transform: translateY(0); }
         
+        /* Interactive header to close the sheet */
         .sheet-header { 
-            width: 100%; height: 40px; cursor: grab; 
+            width: 100%; height: 48px; cursor: pointer; 
             display: flex; align-items: center; justify-content: center;
             position: sticky; top: 0; background: transparent;
             z-index: 10;
+            -webkit-tap-highlight-color: transparent;
         }
-        .sheet-handle { width: 36px; height: 5px; background: rgba(0,0,0,0.15); border-radius: 3px; }
+        .sheet-header:active .sheet-handle { background: rgba(0,0,0,0.3); transform: scaleX(1.1); }
+        .sheet-handle { 
+            width: 40px; height: 5px; background: rgba(0,0,0,0.15); 
+            border-radius: 3px; transition: all 0.2s; 
+        }
         
         /* Command Groups */
         .cmd-group { 
@@ -164,7 +170,8 @@
 </div>
 
 <div id="infoSheet">
-    <div class="sheet-header" id="sheetHeader">
+    <!-- Click to close header -->
+    <div class="sheet-header" id="sheetHeader" onclick="closeSheet()">
         <div class="sheet-handle"></div>
     </div>
     <div id="sheetContent"></div>
@@ -194,21 +201,12 @@ const ui = {
 
 const tg = window.Telegram.WebApp;
 
-// Включаем полноэкранный режим и расширяем приложение
 const initTelegram = () => {
     tg.ready();
     tg.expand();
-    
-    // Пытаемся вызвать полноэкранный режим (API 7.0+)
     if (tg.isVersionAtLeast('7.0')) {
-        try {
-            tg.requestFullscreen();
-        } catch (e) {
-            console.warn("Fullscreen request failed", e);
-        }
+        try { tg.requestFullscreen(); } catch (e) {}
     }
-    
-    // Настраиваем цвета шапки
     if (tg.isVersionAtLeast('6.1')) {
         tg.setHeaderColor('#000000');
         tg.setBackgroundColor('#000000');
@@ -218,7 +216,6 @@ const initTelegram = () => {
 ymaps.ready(() => {
     try {
         initTelegram();
-        
         map = new ymaps.Map("map", { center: [55.75, 37.62], zoom: 11, type: 'yandex#satellite', controls: [] });
         pointCollection = new ymaps.GeoObjectCollection();
         map.geoObjects.add(pointCollection);
@@ -231,66 +228,10 @@ ymaps.ready(() => {
         });
         
         initGeo();
-        initSwipe();
         loadData();
         if (tg.initDataUnsafe?.user) sendStats(tg.initDataUnsafe.user);
     } catch (e) { console.error("Map failed", e); }
 });
-
-function initSwipe() {
-    let startY = 0, currentY = 0, isDragging = false;
-
-    const onStart = (e) => {
-        // Не перехватываем жест на интерактивных элементах
-        if (e.target.closest('.icon-btn, .cmd-info, .menu-item')) return;
-        startY = e.touches ? e.touches[0].clientY : e.clientY;
-        
-        // Начинаем перетаскивание только если мы вверху контента шторки
-        if (ui.sheet.scrollTop <= 5) {
-            isDragging = true;
-            ui.sheet.style.transition = 'none';
-        }
-    };
-
-    const onMove = (e) => {
-        if (!isDragging) return;
-        currentY = e.touches ? e.touches[0].clientY : e.clientY;
-        let diff = currentY - startY;
-        
-        // Только если тянем вниз
-        if (diff > 0) {
-            if (e.cancelable) e.preventDefault();
-            requestAnimationFrame(() => {
-                ui.sheet.style.transform = `translateY(${diff}px)`;
-            });
-        } else {
-            // Если начали тянуть вверх - отменяем свободное движение шторки
-            isDragging = false;
-            ui.sheet.style.transform = 'translateY(0)';
-        }
-    };
-
-    const onEnd = () => {
-        if (!isDragging) return;
-        isDragging = false;
-        
-        // Возвращаем плавную анимацию
-        ui.sheet.style.transition = 'transform .4s cubic-bezier(0.16, 1, 0.3, 1)';
-        
-        let finalDiff = currentY - startY;
-        // Если протащили достаточно далеко вниз - закрываем
-        if (finalDiff > 100) {
-            closeSheet();
-        } else {
-            // Иначе возвращаем на место
-            ui.sheet.style.transform = 'translateY(0)';
-        }
-    };
-
-    ui.sheet.addEventListener('touchstart', onStart, {passive: false});
-    ui.sheet.addEventListener('touchmove', onMove, {passive: false});
-    ui.sheet.addEventListener('touchend', onEnd);
-}
 
 async function loadData() {
     try {
@@ -417,7 +358,6 @@ window.showPoint = (id) => {
     state = { ...state, activeId: id, pathIdx: -1, expIdx: -1, commIdx: -1 };
     ui.fCont.style.display = 'none';
     points.forEach(p => p.pm.options.set('visible', p.id === id));
-    ui.sheet.style.transform = 'translateY(100%)';
     ui.sheet.classList.add('active');
     renderSheet();
     requestAnimationFrame(() => {
@@ -426,17 +366,11 @@ window.showPoint = (id) => {
 };
 
 window.closeSheet = () => {
-    // Принудительно выставляем анимацию и убираем шторку вниз
-    ui.sheet.style.transition = 'transform .4s cubic-bezier(0.16, 1, 0.3, 1)';
     ui.sheet.style.transform = 'translateY(100%)';
-    
     setTimeout(() => { 
         ui.sheet.classList.remove('active');
         ui.fCont.style.display = 'flex';
         ui.sheet.scrollTop = 0;
-        // Сбрасываем инлайн стили, чтобы при следующем открытии не было смещения
-        ui.sheet.style.transform = '';
-        
         points.forEach(p => p.paths.forEach(o => { 
             o.line.options.set('visible', false); 
             o.pmEnd.options.set('visible', false); 
