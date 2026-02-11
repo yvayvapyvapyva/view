@@ -148,11 +148,20 @@
         .tts-btn:active { background: rgba(0,122,255,0.1); }
         .tts-btn.speaking { color: #ff3b30; animation: blink 1s infinite; }
         @keyframes blink { 50% { opacity: 0.5; } }
+        
+        /* Error Toast */
+        #toast {
+            position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.8); color: white; padding: 12px 20px;
+            border-radius: 12px; font-size: 14px; z-index: 9999;
+            display: none; text-align: center; width: 80%;
+        }
     </style>
 </head>
 <body>
 
 <div id="map"></div>
+<div id="toast"></div>
 
 <div class="filter-container" id="fCont">
     <div id="filterTrigger" class="map-btn" onclick="toggleMenu()">
@@ -192,38 +201,70 @@ const ui = {
     header: document.getElementById('sheetHeader'),
     content: document.getElementById('sheetContent'),
     fCont: document.getElementById('fCont'),
-    locate: document.getElementById('locateBtn')
+    locate: document.getElementById('locateBtn'),
+    toast: document.getElementById('toast')
 };
 
 const tg = window.Telegram.WebApp;
 
-/** 🎤 SYNTHESIZER SETUP */
+/** 🎤 SYNTHESIZER SETUP WITH ANDROID FIXES */
 const synth = window.speechSynthesis;
-let currentUtterance = null;
+let voices = [];
+
+function showToast(msg) {
+    ui.toast.innerText = msg;
+    ui.toast.style.display = 'block';
+    setTimeout(() => ui.toast.style.display = 'none', 3000);
+}
+
+// Load voices as soon as they are available
+function loadVoices() {
+    voices = synth.getVoices();
+}
+if (speechSynthesis.onvoiceschanged !== undefined) {
+    speechSynthesis.onvoiceschanged = loadVoices;
+}
 
 function speak(text, btn) {
+    if (!synth) {
+        showToast("Синтез речи недоступен в этом браузере.");
+        return;
+    }
+
     if (synth.speaking) {
         synth.cancel();
-        if (btn.classList.contains('speaking')) {
+        if (btn && btn.classList.contains('speaking')) {
             btn.classList.remove('speaking');
             return;
         }
     }
     
-    // Remove "speaking" from all buttons
+    // Clear other buttons
     document.querySelectorAll('.tts-btn').forEach(b => b.classList.remove('speaking'));
     
     const utterance = new SpeechSynthesisUtterance(text);
+    
+    // Find Russian voice
+    if (voices.length === 0) voices = synth.getVoices();
+    const ruVoice = voices.find(v => v.lang.includes('ru')) || voices[0];
+    if (ruVoice) utterance.voice = ruVoice;
+    
     utterance.lang = 'ru-RU';
-    utterance.rate = 1.0;
-    utterance.pitch = 1.0;
+    utterance.rate = 0.9; // Slightly slower for clarity
     
-    utterance.onstart = () => btn.classList.add('speaking');
-    utterance.onend = () => btn.classList.remove('speaking');
-    utterance.onerror = () => btn.classList.remove('speaking');
+    utterance.onstart = () => btn && btn.classList.add('speaking');
+    utterance.onend = () => btn && btn.classList.remove('speaking');
+    utterance.onerror = (e) => {
+        console.error("TTS Error:", e);
+        btn && btn.classList.remove('speaking');
+        // If it's a "not-allowed" error on Android WebView
+        if (e.error === 'not-allowed') showToast("Нажмите еще раз для активации звука");
+        else showToast("Ошибка синтеза речи. Проверьте настройки Android TTS.");
+    };
     
-    currentUtterance = utterance;
-    synth.speak(utterance);
+    // Android Fix: Calling cancel before speak sometimes helps "wake up" the engine
+    synth.cancel();
+    setTimeout(() => synth.speak(utterance), 50);
 }
 
 /** 🗺️ INIT MAP & GEO */
@@ -231,6 +272,10 @@ ymaps.ready(() => {
     try {
         tg.ready();
         tg.expand();
+        
+        // Android WebView Hack: Try to trigger voice load on first interaction
+        document.body.addEventListener('click', () => { if(voices.length === 0) loadVoices(); }, { once: true });
+
         if (tg.isVersionAtLeast('7.0') && typeof tg.requestFullscreen === 'function') tg.requestFullscreen();
         if (tg.isVersionAtLeast('6.1')) tg.setHeaderColor('#000000');
         
@@ -408,7 +453,7 @@ window.showPoint = (id) => {
 };
 
 window.closeSheet = () => {
-    if (synth.speaking) synth.cancel();
+    if (synth && synth.speaking) synth.cancel();
     ui.sheet.classList.remove('active');
     ui.fCont.style.display = 'flex';
     setTimeout(() => { 
