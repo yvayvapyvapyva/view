@@ -132,7 +132,7 @@
         .sub-steps { display: flex; flex-direction: column; gap: 12px; }
         .step-item { 
             font-size: 15px; color: var(--text-main); font-weight: 500;
-            display: flex; align-items: flex-start; gap: 10px;
+            display: flex; align-items: center; gap: 10px;
             line-height: 1.4;
             padding: 8px 12px;
             background: rgba(0,0,0,0.02);
@@ -143,8 +143,17 @@
             background: rgba(0,122,255,0.1); color: var(--accent);
             font-size: 11px; font-weight: 800;
             display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-            margin-top: 1px;
         }
+        
+        .tts-btn {
+            width: 32px; height: 32px; flex-shrink: 0;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 50%; background: transparent; color: var(--accent);
+            cursor: pointer; transition: all 0.2s;
+        }
+        .tts-btn:active { background: rgba(0,122,255,0.1); transform: scale(1.1); }
+        .tts-btn.speaking { color: #ff3b30; animation: pulse 1s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
     </style>
 </head>
 <body>
@@ -218,7 +227,7 @@ ymaps.ready(() => {
 function initSwipe() {
     let startY = 0, isDragging = false;
     const hStart = (e) => {
-        if (e.target.closest('.icon-btn, .cmd-info, .sub-steps')) return;
+        if (e.target.closest('.icon-btn, .cmd-info, .sub-steps, .tts-btn')) return;
         startY = e.touches ? e.touches[0].clientY : e.clientY;
         if (ui.sheet.scrollTop <= 0) { isDragging = true; ui.sheet.style.transition = 'none'; }
     };
@@ -290,7 +299,6 @@ function renderSheet() {
         path.pmEnd.options.set('visible', state.pathIdx === -1 || isSel);
         
         const cmds = Array.isArray(path.raw.cmd) ? path.raw.cmd : [];
-        // Изменено название на ВАРИАНТЫ КОМАНД при раскрытии списка
         const titleText = isExp ? `ВАРИАНТЫ КОМАНД` : (cmds[0] || `Маршрут ${i+1}`);
 
         return `
@@ -321,6 +329,9 @@ function renderSheet() {
                                 <div class="step-item">
                                     <div class="step-num">${idx + 1}</div>
                                     <div style="flex:1">${c}</div>
+                                    <div class="tts-btn" onclick="speakText('${c.replace(/'/g, "\\'")}', this)">
+                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+                                    </div>
                                 </div>
                             `).join('')}
                         </div>` : ''}
@@ -329,6 +340,24 @@ function renderSheet() {
         </div>`;
     }).join('');
 }
+
+/** 🎤 SPEECH SYNTHESIS */
+window.speakText = (text, btn) => {
+    if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel(); // Остановить текущую речь
+        const msg = new SpeechSynthesisUtterance(text);
+        msg.lang = 'ru-RU';
+        msg.rate = 1.0;
+        
+        btn.classList.add('speaking');
+        msg.onend = () => btn.classList.remove('speaking');
+        msg.onerror = () => btn.classList.remove('speaking');
+        
+        window.speechSynthesis.speak(msg);
+    } else {
+        tg.showAlert("Синтез речи не поддерживается вашим устройством");
+    }
+};
 
 function renderMenu(data) {
     const used = new Set(data.map(d => d.color));
