@@ -241,8 +241,11 @@ function initSwipe() {
     let startY = 0, currentY = 0, isDragging = false;
 
     const onStart = (e) => {
+        // Не перехватываем жест на интерактивных элементах
         if (e.target.closest('.icon-btn, .cmd-info, .menu-item')) return;
         startY = e.touches ? e.touches[0].clientY : e.clientY;
+        
+        // Начинаем перетаскивание только если мы вверху контента шторки
         if (ui.sheet.scrollTop <= 5) {
             isDragging = true;
             ui.sheet.style.transition = 'none';
@@ -254,12 +257,14 @@ function initSwipe() {
         currentY = e.touches ? e.touches[0].clientY : e.clientY;
         let diff = currentY - startY;
         
+        // Только если тянем вниз
         if (diff > 0) {
             if (e.cancelable) e.preventDefault();
             requestAnimationFrame(() => {
                 ui.sheet.style.transform = `translateY(${diff}px)`;
             });
         } else {
+            // Если начали тянуть вверх - отменяем свободное движение шторки
             isDragging = false;
             ui.sheet.style.transform = 'translateY(0)';
         }
@@ -268,12 +273,16 @@ function initSwipe() {
     const onEnd = () => {
         if (!isDragging) return;
         isDragging = false;
+        
+        // Возвращаем плавную анимацию
         ui.sheet.style.transition = 'transform .4s cubic-bezier(0.16, 1, 0.3, 1)';
         
         let finalDiff = currentY - startY;
-        if (finalDiff > 120) {
+        // Если протащили достаточно далеко вниз - закрываем
+        if (finalDiff > 100) {
             closeSheet();
         } else {
+            // Иначе возвращаем на место
             ui.sheet.style.transform = 'translateY(0)';
         }
     };
@@ -417,18 +426,24 @@ window.showPoint = (id) => {
 };
 
 window.closeSheet = () => {
+    // Принудительно выставляем анимацию и убираем шторку вниз
+    ui.sheet.style.transition = 'transform .4s cubic-bezier(0.16, 1, 0.3, 1)';
     ui.sheet.style.transform = 'translateY(100%)';
+    
     setTimeout(() => { 
         ui.sheet.classList.remove('active');
         ui.fCont.style.display = 'flex';
         ui.sheet.scrollTop = 0;
+        // Сбрасываем инлайн стили, чтобы при следующем открытии не было смещения
+        ui.sheet.style.transform = '';
+        
         points.forEach(p => p.paths.forEach(o => { 
             o.line.options.set('visible', false); 
             o.pmEnd.options.set('visible', false); 
         }));
         applyFilter(state.filter);
         state.activeId = null;
-    }, 300);
+    }, 400);
 };
 
 window.contactAdmin = () => tg.openTelegramLink(`https://t.me/${CFG.ADMIN}`);
