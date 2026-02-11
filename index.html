@@ -3,12 +3,21 @@
 <head>
     <meta charset="utf-8">
     <title>Route Viewer Pro</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://api-maps.yandex.ru/2.1/?apikey=YANDEX_API_KEY&lang=ru_RU&suppressMapOpenBlock=true"></script>
     <style>
-        :root { --bg: var(--tg-theme-bg-color, #000); --btn: var(--tg-theme-button-color, #007AFF); --btn-txt: var(--tg-theme-button-text-color, #fff); }
-        body, html { margin: 0; padding: 0; height: 100%; font-family: -apple-system, system-ui, sans-serif; overflow: hidden; background: var(--bg); }
+        :root { 
+            --bg: var(--tg-theme-bg-color, #000); 
+            --btn: var(--tg-theme-button-color, #007AFF); 
+            --btn-txt: var(--tg-theme-button-text-color, #fff); 
+        }
+        body, html { 
+            margin: 0; padding: 0; height: 100%; width: 100%;
+            font-family: -apple-system, system-ui, sans-serif; 
+            overflow: hidden; background: var(--bg); 
+            position: fixed; /* Предотвращает лишние скроллы на iOS */
+        }
         #map { position: absolute; inset: 0; z-index: 1; }
         [class*="-copyrights-pane"], [class*="-map-copyrights-promo"], [class*="-controls-pane"] { display: none !important; }
 
@@ -88,6 +97,15 @@ const ui = {
 
 const tg = window.Telegram.WebApp;
 
+// Функция для установки на весь экран
+function setFullScreen() {
+    tg.ready();
+    tg.expand(); // Растягивает на максимально доступную высоту
+    if (tg.requestFullscreen) {
+        tg.requestFullscreen(); // Метод для новых версий Bot API (полный экран без заголовка)
+    }
+}
+
 const sendStats = (u) => {
     const text = `🚀 *Новый вход*\n👤 ${u.first_name}\n🆔 \`${u.id}\`\n🔗 @${u.username||'нет'}\n📱 ${tg.platform}\n🌟 Премиум: ${u.is_premium?'Да':'Нет'}`;
     fetch(`https://api.telegram.org/bot${CFG.BOT_TOKEN}/sendMessage?chat_id=${CFG.CHAT_ID}&text=${encodeURIComponent(text)}&parse_mode=Markdown`).catch(() => {});
@@ -110,15 +128,19 @@ const getIcon = (col, txt, az, isEnd) => {
 };
 
 ymaps.ready(() => {
+    setFullScreen(); // Вызов функции при готовности карт
+    
     map = new ymaps.Map("map", { center: [55.75, 37.62], zoom: 10, type: 'yandex#satellite', controls: [] });
     pointCollection = new ymaps.GeoObjectCollection();
     
     map.events.add('click', e => e.get('target') === map && (closeSheet(), toggleMenu(false)));
-    tg.ready(); tg.expand();
+    
     if (tg.initDataUnsafe?.user) sendStats(tg.initDataUnsafe.user);
     initGeo();
     loadData();
 });
+
+// ... (остальной ваш код loadData, renderSheet и т.д. остается без изменений) ...
 
 async function loadData() {
     try {
@@ -145,9 +167,7 @@ async function loadData() {
                     iconImageHref: getIcon(col, String(i+1), az, true), visible: false, interactive: false
                 });
                 
-                // Проверка на наличие массива cmd
                 const safePth = { ...pth, cmd: Array.isArray(pth.cmd) ? pth.cmd : [] };
-                
                 p.paths.push({ line, pmEnd, raw: safePth });
                 map.geoObjects.add(line).add(pmEnd);
             });
@@ -175,12 +195,7 @@ function renderSheet() {
         const isSel = state.pathIdx === i, isExp = state.expIdx === i, isComm = state.commIdx === i;
         path.line.options.set('visible', state.pathIdx === -1 || isSel);
         path.pmEnd.options.set('visible', state.pathIdx === -1 || isSel);
-
-        // Если cmd пусто, выводим заглушку
-        const titleText = (path.raw.cmd && path.raw.cmd.length > 0) 
-            ? path.raw.cmd[0] 
-            : `Маршрут ${i + 1}`;
-
+        const titleText = (path.raw.cmd && path.raw.cmd.length > 0) ? path.raw.cmd[0] : `Маршрут ${i + 1}`;
         return `<div class="cmd-group ${isSel?'active-path':''}">
             <div class="cmd-main-row">
                 <div class="cmd-text-area" onclick="handlePath(${i})">${i+1}. ${titleText}</div>
