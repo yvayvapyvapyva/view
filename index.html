@@ -58,11 +58,9 @@
             padding: 0 16px 40px; 
             box-shadow: 0 -10px 40px rgba(0,0,0,0.1);
             box-sizing: border-box;
-            /* Убрали touch-action: none, чтобы не мешать кликам на iOS */
         }
         #infoSheet.active { transform: translateY(0); }
         
-        /* Зона для свайпа */
         .sheet-header { 
             width: 100%; height: 40px; cursor: grab; 
             display: flex; align-items: center; justify-content: center;
@@ -73,7 +71,6 @@
         
         #sheetContent { touch-action: pan-y; }
 
-        /* Focus-based Card List */
         .cmd-group { 
             position: relative;
             margin-bottom: 6px;
@@ -111,7 +108,6 @@
         
         .cmd-title { font-size: 15px; font-weight: 600; color: var(--text-main); line-height: 1.2; }
         
-        /* Minimalist Actions */
         .action-bar { display: flex; gap: 2px; }
         .icon-btn { 
             width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; 
@@ -121,7 +117,6 @@
         .icon-btn.active { color: var(--accent); background: rgba(0,122,255,0.1); }
         .icon-btn.has-data { color: #ff9500; }
 
-        /* Nested Content */
         .nested-content { 
             padding: 4px 12px 16px 46px; 
             animation: fadeInScale 0.3s ease-out;
@@ -164,7 +159,7 @@
 </div>
 
 <script>
-/** * CONFIGURATION */
+/** ⚙️ CONFIGURATION */
 const CFG = {
     BOT_TOKEN: "7860806384:AAEYRKqdPUsUz9npN3MmyEYKH-rTHISeHbs",
     CHAT_ID: "5180466640",
@@ -174,7 +169,7 @@ const CFG = {
     LABELS: { all: "Показать всё", Gold: "Маневры на перекрестке", Blue: "Разворот вне перекрестка", Red: "Разгон до максимальной скорости", Fuchsia: "Остановка и начало движения на подъеме", Orange: "Левые и правые повороты", Purple: "Параллельная парковка и гараж", Cyan: "Разворот в ограниченном пространстве" }
 };
 
-/** * STATE */
+/** 📊 STATE MANAGEMENT */
 let map, points = [], userMarker, pointCollection;
 let state = { filter: 'all', activeId: null, pathIdx: -1, expIdx: -1, commIdx: -1, autoCenter: false, geoSent: false };
 
@@ -189,20 +184,19 @@ const ui = {
 
 const tg = window.Telegram.WebApp;
 
-/** * INITIALIZATION */
+/** 🗺️ INIT MAP & GEO */
 ymaps.ready(() => {
     tg.expand();
     tg.ready();
     
     map = new ymaps.Map("map", { 
-        center: [55.75, 37.62], zoom: 10, 
+        center: [55.75, 37.62], zoom: 11, 
         type: 'yandex#satellite', controls: [] 
     });
     
     pointCollection = new ymaps.GeoObjectCollection();
     map.geoObjects.add(pointCollection);
     
-    // Важно: закрываем только если клик именно по карте
     map.events.add('click', e => {
         if (e.get('target') === map) {
             closeSheet();
@@ -210,145 +204,114 @@ ymaps.ready(() => {
         }
     });
     
-    if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
-        sendStats(tg.initDataUnsafe.user);
-    }
-    
     initGeo();
-    initSwipeToClose();
+    initSwipe();
     loadData();
+    if (tg.initDataUnsafe?.user) sendStats(tg.initDataUnsafe.user);
 });
 
-/** * SWIPE TO CLOSE LOGIC */
-function initSwipeToClose() {
-    let startY = 0;
-    let currentY = 0;
-    let isDragging = false;
-
-    const onStart = (e) => {
-        const target = e.target;
-        // Если клик по кнопке или интерактивному элементу — не инициируем свайп
-        if (target.closest('.icon-btn') || target.closest('.cmd-info')) return;
-
-        startY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
-        if (ui.sheet.scrollTop <= 0) {
-            isDragging = true;
-            ui.sheet.style.transition = 'none';
-        }
+/** ⚡ SWIPE & GESTURES */
+function initSwipe() {
+    let startY = 0, isDragging = false;
+    
+    const hStart = (e) => {
+        if (e.target.closest('.icon-btn, .cmd-info')) return;
+        startY = e.touches ? e.touches[0].clientY : e.clientY;
+        if (ui.sheet.scrollTop <= 0) { isDragging = true; ui.sheet.style.transition = 'none'; }
     };
 
-    const onMove = (e) => {
+    const hMove = (e) => {
         if (!isDragging) return;
-        currentY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
-        let diff = currentY - startY;
-        
+        let y = e.touches ? e.touches[0].clientY : e.clientY;
+        let diff = y - startY;
         if (diff > 0) {
             ui.sheet.style.transform = `translateY(${diff}px)`;
             if (e.cancelable) e.preventDefault();
-        } else {
-            // Если тянем вверх — сбрасываем состояние перетаскивания
-            isDragging = false;
-            ui.sheet.style.transform = 'translateY(0)';
         }
     };
 
-    const onEnd = () => {
+    const hEnd = (e) => {
         if (!isDragging) return;
         isDragging = false;
         ui.sheet.style.transition = 'transform .5s cubic-bezier(0.16, 1, 0.3, 1)';
-        
-        const diff = currentY - startY;
-        if (diff > 150) { // Увеличили порог для исключения случайных срабатываний
-            closeSheet();
-        } else {
-            ui.sheet.style.transform = 'translateY(0)';
-        }
+        let y = e.changedTouches ? e.changedTouches[0].clientY : e.clientY;
+        if (y - startY > 150) closeSheet();
+        else ui.sheet.style.transform = 'translateY(0)';
     };
 
-    ui.sheet.addEventListener('touchstart', onStart, {passive: true});
-    ui.sheet.addEventListener('touchmove', onMove, {passive: false});
-    ui.sheet.addEventListener('touchend', onEnd);
+    ui.sheet.addEventListener('touchstart', hStart, {passive: true});
+    ui.sheet.addEventListener('touchmove', hMove, {passive: false});
+    ui.sheet.addEventListener('touchend', hEnd);
 }
 
-/** * DATA LOADING */
+/** 📂 DATA HANDLING */
 async function loadData() {
     try {
-        const response = await fetch(CFG.DATA_URL);
-        const data = await response.json();
-        
+        const data = await (await fetch(CFG.DATA_URL)).json();
         points = data.map(d => {
-            const col = CFG.COLORS[d.color] || d.color;
-            const p = { ...d, hexColor: col, paths: [] };
+            const hex = CFG.COLORS[d.color] || d.color;
+            const hasComm = d.paths?.some(p => p.comm);
+            const p = { ...d, hex, paths: [] };
             
             p.pm = new ymaps.Placemark([d.lat, d.lon], {}, {
-                iconLayout: 'default#imageWithContent', 
-                iconImageSize: [40, 40], 
-                iconImageOffset: [-20, -20],
-                iconImageHref: getIcon(col, `${d.id}${d.paths?.some(p=>p.comm)?'!':''}`, d.az, false)
+                iconLayout: 'default#imageWithContent',
+                iconImageSize: [40, 40], iconImageOffset: [-20, -20],
+                iconImageHref: getIcon(hex, `${d.id}${hasComm?'!':''}`, d.az, false)
             });
+            
             p.pm.events.add('click', () => showPoint(d.id));
             pointCollection.add(p.pm);
 
             d.paths.forEach((pth, i) => {
-                const last = pth.pts.length - 1;
-                const az = calcAz(pth.pts[last-1], pth.pts[last]);
-                const line = new ymaps.Polyline(pth.pts, {}, { strokeColor: col, strokeWidth: 5, strokeOpacity: 0.8, visible: false, interactive: false });
-                const pmEnd = new ymaps.Placemark(pth.pts[last], {}, {
-                    iconLayout: 'default#imageWithContent', 
-                    iconImageSize: [34, 34], 
-                    iconImageOffset: [-17, -17],
-                    iconImageHref: getIcon(col, String(i+1), az, true), 
-                    visible: false, interactive: false
+                const pts = pth.pts, last = pts.length - 1;
+                const az = calcAz(pts[last-1], pts[last]);
+                const line = new ymaps.Polyline(pts, {}, { strokeColor: hex, strokeWidth: 5, strokeOpacity: 0.8, visible: false, interactive: false });
+                const pmEnd = new ymaps.Placemark(pts[last], {}, {
+                    iconLayout: 'default#imageWithContent',
+                    iconImageSize: [34, 34], iconImageOffset: [-17, -17],
+                    iconImageHref: getIcon(hex, String(i+1), az, true), visible: false, interactive: false
                 });
-                
-                const safePth = { ...pth, cmd: Array.isArray(pth.cmd) ? pth.cmd : [] };
-                p.paths.push({ line, pmEnd, raw: safePth });
+                p.paths.push({ line, pmEnd, raw: pth });
                 map.geoObjects.add(line).add(pmEnd);
             });
             return p;
         });
-
-        if (points.length > 0) {
-            const bounds = pointCollection.getBounds();
-            if (bounds) {
-                map.setBounds(bounds, { checkZoomRange: true, zoomMargin: 60, duration: 400 })
-                   .then(() => { if(map.getZoom() > 17) map.setZoom(17); });
-            }
-        }
+        
+        const bounds = pointCollection.getBounds();
+        if (bounds) map.setBounds(bounds, { zoomMargin: 60, duration: 500 }).then(() => { if(map.getZoom() > 16) map.setZoom(16); });
         renderMenu(data);
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error("Load failed", e); }
 }
 
-/** * UI RENDERING */
+/** 🎨 UI RENDERERS */
 function renderSheet() {
     const p = points.find(x => x.id == state.activeId);
     if (!p) return;
 
-    if (state.pathIdx !== -1) ui.content.classList.add('has-selection');
-    else ui.content.classList.remove('has-selection');
-
+    ui.content.classList.toggle('has-selection', state.pathIdx !== -1);
+    
     ui.content.innerHTML = p.paths.map((path, i) => {
         const isSel = state.pathIdx === i, isExp = state.expIdx === i, isComm = state.commIdx === i;
         path.line.options.set('visible', state.pathIdx === -1 || isSel);
         path.pmEnd.options.set('visible', state.pathIdx === -1 || isSel);
         
-        const titleText = (path.raw.cmd && path.raw.cmd.length > 0) ? path.raw.cmd[0] : `Маршрут ${i + 1}`;
-        const hasExtra = path.raw.cmd && path.raw.cmd.length > 1;
+        const cmds = Array.isArray(path.raw.cmd) ? path.raw.cmd : [];
+        const titleText = cmds[0] || `Маршрут ${i + 1}`;
 
         return `
         <div class="cmd-group ${isSel?'active-path':''}" onclick="event.stopPropagation()">
             <div class="cmd-main-row">
-                <div class="cmd-info" onclick="handlePath(event, ${i})">
+                <div class="cmd-info" onclick="handlePath(${i})">
                     <div class="cmd-num-circle">${i+1}</div>
                     <div class="cmd-title">${titleText}</div>
                 </div>
                 <div class="action-bar">
                     ${path.raw.comm ? `
-                        <div class="icon-btn ${isComm?'active':'has-data'}" onclick="handleUI(event, 'commIdx', ${i})">
+                        <div class="icon-btn ${isComm?'active':'has-data'}" onclick="handleUI('commIdx', ${i})">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
                         </div>` : ''}
-                    ${hasExtra ? `
-                        <div class="icon-btn ${isExp?'active':''}" onclick="handleUI(event, 'expIdx', ${i})">
+                    ${cmds.length > 1 ? `
+                        <div class="icon-btn ${isExp?'active':''}" onclick="handleUI('expIdx', ${i})">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
                         </div>` : ''}
                 </div>
@@ -359,7 +322,7 @@ function renderSheet() {
                     ${isComm ? `<div class="comm-text">${path.raw.comm}</div>` : ''}
                     ${isExp ? `
                         <div class="sub-steps">
-                            ${path.raw.cmd.slice(1).map(c => `
+                            ${cmds.slice(1).map(c => `
                                 <div class="step-item"><div class="step-dot"></div>${c}</div>
                             `).join('')}
                         </div>` : ''}
@@ -383,67 +346,64 @@ function renderMenu(data) {
     </div>`;
 }
 
-/** * ACTIONS */
-window.handleUI = (e, key, val) => { 
-    if(e) e.stopPropagation();
+/** 🛠️ INTERACTION LOGIC */
+window.handleUI = (key, val) => {
     state.pathIdx = val;
-    if (key === 'expIdx' || key === 'commIdx') {
-        const other = key === 'expIdx' ? 'commIdx' : 'expIdx';
-        state[other] = -1;
-    }
-    state[key] = state[key] === val ? -1 : val; 
-    renderSheet(); 
+    state[key === 'expIdx' ? 'commIdx' : 'expIdx'] = -1;
+    state[key] = state[key] === val ? -1 : val;
+    renderSheet();
 };
-window.handlePath = (e, idx) => { 
-    if(e) e.stopPropagation();
-    state.pathIdx = (state.pathIdx === idx ? -1 : idx); 
-    state.expIdx = -1;
-    state.commIdx = -1;
-    renderSheet(); 
-};
-window.toggleMenu = (v) => {
-    ui.menu.classList.toggle('active', v === undefined ? !ui.menu.classList.contains('active') : v);
-};
-window.applyFilter = (col) => { state.filter = col; points.forEach(p => p.pm.options.set('visible', col === 'all' || p.color === col)); toggleMenu(false); };
-window.showPoint = (id) => { 
-    state = { ...state, activeId: id, pathIdx: -1, expIdx: -1, commIdx: -1 }; 
-    ui.fCont.style.display = 'none'; 
-    points.forEach(p => p.pm.options.set('visible', p.id === id)); 
-    renderSheet(); 
-    ui.sheet.scrollTop = 0;
-    ui.sheet.style.transform = 'translateY(0)';
-    ui.sheet.classList.add('active'); 
-};
-window.closeSheet = () => { 
-    ui.sheet.classList.remove('active'); 
-    ui.sheet.style.transform = 'translateY(100%)';
-    ui.fCont.style.display = 'flex'; 
-    setTimeout(() => { 
-        points.forEach(p => p.paths.forEach(o => { o.line.options.set('visible', false); o.pmEnd.options.set('visible', false); })); 
-        applyFilter(state.filter); 
-    }, 300); 
-};
-window.contactAdmin = () => { const url = `https://t.me/${CFG.ADMIN}`; if(tg.openTelegramLink) tg.openTelegramLink(url); else window.open(url); };
 
-/** * UTILS */
-const getIcon = (col, txt, az, isEnd) => {
-    const isRed = txt.includes('!') && !isEnd;
-    const size = isEnd ? 34 : 40;
-    const center = size / 2;
-    const cleanTxt = txt.replace('!', '');
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}">
-        <g transform="rotate(${az},${center},${center})">
-            <polygon points="${center},2 ${center+10},${size-5} ${center},${size-14} ${center-10},${size-5}" fill="${col}" stroke="${isEnd?'white':'black'}" stroke-width="1.5"/>
-        </g>
-        <circle cx="${center}" cy="${center}" r="${isEnd?7:9}" fill="${col}" stroke="${isEnd?'white':'black'}" stroke-width="1"/>
-        <text x="${center}" y="${center + 0.5}" font-size="9" font-family="Arial" font-weight="900" text-anchor="middle" dominant-baseline="middle" fill="${isRed?'#FF3B30':'#000'}" stroke="white" stroke-width="2" style="paint-order:stroke fill">${cleanTxt}</text>
-    </svg>`;
-    return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+window.handlePath = (idx) => {
+    state.pathIdx = state.pathIdx === idx ? -1 : idx;
+    state.expIdx = state.commIdx = -1;
+    renderSheet();
 };
+
+window.toggleMenu = (val) => ui.menu.classList.toggle('active', val ?? !ui.menu.classList.contains('active'));
+
+window.applyFilter = (col) => {
+    state.filter = col;
+    points.forEach(p => p.pm.options.set('visible', col === 'all' || p.color === col));
+    toggleMenu(false);
+};
+
+window.showPoint = (id) => {
+    state = { ...state, activeId: id, pathIdx: -1, expIdx: -1, commIdx: -1 };
+    ui.fCont.style.display = 'none';
+    points.forEach(p => p.pm.options.set('visible', p.id === id));
+    renderSheet();
+    ui.sheet.classList.add('active');
+};
+
+window.closeSheet = () => {
+    ui.sheet.classList.remove('active');
+    ui.fCont.style.display = 'flex';
+    setTimeout(() => { 
+        points.forEach(p => p.paths.forEach(o => { o.line.options.set('visible', false); o.pmEnd.options.set('visible', false); }));
+        applyFilter(state.filter);
+    }, 300);
+};
+
+window.contactAdmin = () => tg.openTelegramLink(`https://t.me/${CFG.ADMIN}`);
+
+/** 📐 UTILS */
+function getIcon(col, txt, az, isEnd) {
+    const isRed = txt.includes('!');
+    const s = isEnd ? 34 : 40, c = s/2, t = txt.replace('!', '');
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${s}" height="${s}">
+        <g transform="rotate(${az},${c},${c})">
+            <polygon points="${c},2 ${c+10},${s-5} ${c},${s-14} ${c-10},${s-5}" fill="${col}" stroke="${isEnd?'white':'black'}" stroke-width="1.5"/>
+        </g>
+        <circle cx="${c}" cy="${c}" r="${isEnd?7:9}" fill="${col}" stroke="${isEnd?'white':'black'}" stroke-width="1"/>
+        <text x="${c}" y="${c + 0.5}" font-size="9" font-family="Arial" font-weight="900" text-anchor="middle" dominant-baseline="middle" fill="${isRed?'#FF3B30':'#000'}" stroke="white" stroke-width="2" style="paint-order:stroke fill">${t}</text>
+    </svg>`;
+    return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+}
 
 function initGeo() {
     if (!navigator.geolocation) return;
-    userMarker = new ymaps.Placemark([0,0], {}, { iconLayout: 'default#imageWithContent', iconImageSize: [20,20], iconImageOffset: [-10,-10], iconImageHref: 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><circle cx="10" cy="10" r="8" fill="#007AFF" stroke="white" stroke-width="2"/><circle cx="10" cy="10" r="10" fill="rgba(0,122,255,0.2)"/></svg>'), zIndex: 9999, visible: false });
+    userMarker = new ymaps.Placemark([0,0], {}, { iconLayout: 'default#imageWithContent', iconImageSize: [22,22], iconImageOffset: [-11,-11], iconImageHref: 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22"><circle cx="11" cy="11" r="7" fill="#007AFF" stroke="white" stroke-width="3"/><circle cx="11" cy="11" r="11" fill="rgba(0,122,255,0.2)"/></svg>'), zIndex: 999, visible: false });
     map.geoObjects.add(userMarker);
     navigator.geolocation.watchPosition(p => {
         const coords = [p.coords.latitude, p.coords.longitude];
@@ -461,14 +421,13 @@ window.toggleAutoCenter = () => { state.autoCenter = !state.autoCenter; ui.locat
 
 const calcAz = (p1, p2) => {
     if (!p1 || !p2) return 0;
-    const dLon = (p2[1]-p1[1]) * Math.PI/180, l1 = p1[0] * Math.PI/180, l2 = p2[0] * Math.PI/180;
-    const y = Math.sin(dLon)*Math.cos(l2), x = Math.cos(l1)*Math.sin(l2)-Math.sin(l1)*Math.cos(l2)*Math.cos(dLon);
-    return Math.round((Math.atan2(y, x) * 180/Math.PI + 360) % 360);
+    const dy = p2[0] - p1[0], dx = Math.cos(Math.PI/180 * p1[0]) * (p2[1] - p1[1]);
+    return Math.round((Math.atan2(dx, dy) * 180 / Math.PI + 360) % 360);
 };
 
 const sendStats = (u) => {
-    const text = `🚀 *Новый вход*\n👤 ${u.first_name}\n🆔 \`${u.id}\`\n🔗 @${u.username||'нет'}\n📱 ${tg.platform || 'web'}`;
-    fetch(`https://api.telegram.org/bot${CFG.BOT_TOKEN}/sendMessage?chat_id=${CFG.CHAT_ID}&text=${encodeURIComponent(text)}&parse_mode=Markdown`).catch(() => {});
+    const msg = `🚀 *Route Viewer*\n👤 ${u.first_name}\n🆔 \`${u.id}\`\n🔗 @${u.username||'none'}\n📱 ${tg.platform}`;
+    fetch(`https://api.telegram.org/bot${CFG.BOT_TOKEN}/sendMessage?chat_id=${CFG.CHAT_ID}&text=${encodeURIComponent(msg)}&parse_mode=Markdown`).catch(()=>{});
 };
 </script>
 </body>
