@@ -194,11 +194,30 @@ const ui = {
 
 const tg = window.Telegram.WebApp;
 
+// Включаем полноэкранный режим и расширяем приложение
+const initTelegram = () => {
+    tg.ready();
+    tg.expand();
+    
+    // Пытаемся вызвать полноэкранный режим (API 7.0+)
+    if (tg.isVersionAtLeast('7.0')) {
+        try {
+            tg.requestFullscreen();
+        } catch (e) {
+            console.warn("Fullscreen request failed", e);
+        }
+    }
+    
+    // Настраиваем цвета шапки
+    if (tg.isVersionAtLeast('6.1')) {
+        tg.setHeaderColor('#000000');
+        tg.setBackgroundColor('#000000');
+    }
+};
+
 ymaps.ready(() => {
     try {
-        tg.ready();
-        tg.expand();
-        if (tg.isVersionAtLeast('6.1')) tg.setHeaderColor('#000000');
+        initTelegram();
         
         map = new ymaps.Map("map", { center: [55.75, 37.62], zoom: 11, type: 'yandex#satellite', controls: [] });
         pointCollection = new ymaps.GeoObjectCollection();
@@ -222,11 +241,8 @@ function initSwipe() {
     let startY = 0, currentY = 0, isDragging = false;
 
     const onStart = (e) => {
-        // Не начинаем свайп, если нажаты кнопки внутри
         if (e.target.closest('.icon-btn, .cmd-info, .menu-item')) return;
-        
         startY = e.touches ? e.touches[0].clientY : e.clientY;
-        // Разрешаем тянуть вниз только если мы в самом верху контента
         if (ui.sheet.scrollTop <= 5) {
             isDragging = true;
             ui.sheet.style.transition = 'none';
@@ -244,7 +260,6 @@ function initSwipe() {
                 ui.sheet.style.transform = `translateY(${diff}px)`;
             });
         } else {
-            // Если тянем вверх, сбрасываем драг и даем скроллить контент
             isDragging = false;
             ui.sheet.style.transform = 'translateY(0)';
         }
