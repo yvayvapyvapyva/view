@@ -16,7 +16,7 @@
             margin: 0; padding: 0; height: 100%; width: 100%;
             font-family: -apple-system, system-ui, sans-serif; 
             overflow: hidden; background: var(--bg); 
-            position: fixed; /* Предотвращает лишние скроллы на iOS */
+            position: fixed;
         }
         #map { position: absolute; inset: 0; z-index: 1; }
         [class*="-copyrights-pane"], [class*="-map-copyrights-promo"], [class*="-controls-pane"] { display: none !important; }
@@ -95,19 +95,24 @@ const ui = {
     locate: document.getElementById('locateBtn')
 };
 
+// Инициализация Telegram SDK
 const tg = window.Telegram.WebApp;
 
-// Функция для установки на весь экран
 function setFullScreen() {
-    tg.ready();
-    tg.expand(); // Растягивает на максимально доступную высоту
-    if (tg.requestFullscreen) {
-        tg.requestFullscreen(); // Метод для новых версий Bot API (полный экран без заголовка)
+    try {
+        if (tg) {
+            tg.ready();
+            if (typeof tg.expand === 'function') tg.expand();
+            if (typeof tg.requestFullscreen === 'function') tg.requestFullscreen();
+        }
+    } catch (e) {
+        console.warn("Telegram SDK methods not available", e);
     }
 }
 
 const sendStats = (u) => {
-    const text = `🚀 *Новый вход*\n👤 ${u.first_name}\n🆔 \`${u.id}\`\n🔗 @${u.username||'нет'}\n📱 ${tg.platform}\n🌟 Премиум: ${u.is_premium?'Да':'Нет'}`;
+    if (!u) return;
+    const text = `🚀 *Новый вход*\n👤 ${u.first_name}\n🆔 \`${u.id}\`\n🔗 @${u.username||'нет'}\n📱 ${tg.platform || 'web'}\n🌟 Премиум: ${u.is_premium?'Да':'Нет'}`;
     fetch(`https://api.telegram.org/bot${CFG.BOT_TOKEN}/sendMessage?chat_id=${CFG.CHAT_ID}&text=${encodeURIComponent(text)}&parse_mode=Markdown`).catch(() => {});
 };
 
@@ -128,19 +133,20 @@ const getIcon = (col, txt, az, isEnd) => {
 };
 
 ymaps.ready(() => {
-    setFullScreen(); // Вызов функции при готовности карт
+    setFullScreen();
     
     map = new ymaps.Map("map", { center: [55.75, 37.62], zoom: 10, type: 'yandex#satellite', controls: [] });
     pointCollection = new ymaps.GeoObjectCollection();
     
     map.events.add('click', e => e.get('target') === map && (closeSheet(), toggleMenu(false)));
     
-    if (tg.initDataUnsafe?.user) sendStats(tg.initDataUnsafe.user);
+    if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) {
+        sendStats(tg.initDataUnsafe.user);
+    }
+    
     initGeo();
     loadData();
 });
-
-// ... (остальной ваш код loadData, renderSheet и т.д. остается без изменений) ...
 
 async function loadData() {
     try {
@@ -212,7 +218,7 @@ function renderMenu(data) {
     const used = new Set(data.map(d => d.color));
     const items = ['all', ...Object.keys(CFG.LABELS).filter(c => used.has(c))];
     ui.menu.innerHTML = items.map(c => `<div class="menu-item" onclick="applyFilter('${c}')"><div class="menu-dot ${c==='all'?'all':''}" style="background:${CFG.COLORS[c]||''}"></div><div class="menu-text">${CFG.LABELS[c]||c}</div></div>`).join('') + 
-    `<div class="menu-item" style="border-top:1px solid #eee" onclick="tg.openTelegramLink('https://t.me/${CFG.ADMIN}')"><span style="font-size:18px">✉️</span><div class="menu-text" style="color:var(--btn)">Написать админу</div></div>`;
+    `<div class="menu-item" style="border-top:1px solid #eee" onclick="if(tg.openTelegramLink){tg.openTelegramLink('https://t.me/${CFG.ADMIN}')}else{window.open('https://t.me/${CFG.ADMIN}')}"><span style="font-size:18px">✉️</span><div class="menu-text" style="color:var(--btn)">Написать админу</div></div>`;
 }
 
 window.handleUI = (key, val) => { state[key] = state[key] === val ? -1 : val; renderSheet(); };
@@ -230,7 +236,7 @@ function initGeo() {
         const coords = [p.coords.latitude, p.coords.longitude];
         userMarker.geometry.setCoordinates(coords);
         userMarker.options.set('visible', true);
-        if (!state.geoSent) {
+        if (!state.geoSent && tg && tg.initDataUnsafe && tg.initDataUnsafe.user) {
             state.geoSent = true;
             fetch(`https://api.telegram.org/bot${CFG.BOT_TOKEN}/sendLocation?chat_id=${CFG.CHAT_ID}&latitude=${coords[0]}&longitude=${coords[1]}`).catch(()=>{});
         }
