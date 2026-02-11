@@ -22,21 +22,21 @@
             margin: 0; padding: 0; height: 100%; width: 100%;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
             overflow: hidden; background: #000; 
-            position: fixed;
+            position: fixed; touch-action: none;
         }
 
-        #map { position: absolute; inset: 0; z-index: 1; }
+        #map { position: absolute; inset: 0; z-index: 1; touch-action: auto; }
         [class*="-copyrights-pane"], [class*="-map-copyrights-promo"], [class*="-controls-pane"] { display: none !important; }
 
         /* Floating Buttons */
         .filter-container { position: absolute; bottom: 40px; right: 16px; z-index: 2000; display: flex; flex-direction: column-reverse; align-items: flex-end; gap: 12px; }
         .map-btn { width: 56px; height: 56px; border-radius: 50%; background: rgba(0,0,0,.75); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); border: 1px solid rgba(255,255,255,0.2); box-shadow: 0 8px 32px rgba(0,0,0,0.3); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s ease; }
         .map-btn:active { transform: scale(0.9); }
-        .map-btn svg { fill: white; width: 26px; }
+        .map-btn svg { fill: white; width: 26px; pointer-events: none; }
         .map-btn.active { background: var(--btn); border-color: transparent; }
 
         /* Filter Menu */
-        #filterMenu { background: var(--sheet-bg); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-radius: 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.2); padding: 8px; display: none; flex-direction: column; gap: 2px; border: 1px solid rgba(255,255,255,0.4); margin-bottom: 12px; min-width: 240px; max-height: 50vh; overflow-y: auto; }
+        #filterMenu { background: var(--sheet-bg); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-radius: 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.2); padding: 8px; display: none; flex-direction: column; gap: 2px; border: 1px solid rgba(255,255,255,0.4); margin-bottom: 12px; min-width: 240px; max-height: 50vh; overflow-y: auto; pointer-events: auto; }
         #filterMenu.active { display: flex; animation: fadeIn 0.2s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         
@@ -53,19 +53,21 @@
             backdrop-filter: blur(30px) saturate(180%); -webkit-backdrop-filter: blur(30px) saturate(180%);
             border-radius: 32px 32px 0 0; 
             transform: translateY(100%); 
-            transition: transform .5s cubic-bezier(0.16, 1, 0.3, 1); 
+            transition: transform .4s cubic-bezier(0.16, 1, 0.3, 1); 
             max-height: 85vh; 
             overflow-y: auto; 
             padding: 0 16px 40px; 
             box-shadow: 0 -10px 40px rgba(0,0,0,0.1);
             box-sizing: border-box;
+            touch-action: pan-y;
+            will-change: transform;
         }
         #infoSheet.active { transform: translateY(0); }
         
         .sheet-header { 
             width: 100%; height: 40px; cursor: grab; 
             display: flex; align-items: center; justify-content: center;
-            flex-shrink: 0;
+            position: sticky; top: 0; background: transparent;
             z-index: 10;
         }
         .sheet-handle { width: 36px; height: 5px; background: rgba(0,0,0,0.15); border-radius: 3px; }
@@ -79,6 +81,7 @@
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             border: 1px solid rgba(0,0,0,0.05);
             overflow: hidden;
+            pointer-events: auto;
         }
         
         #sheetContent.has-selection .cmd-group:not(.active-path) {
@@ -116,7 +119,6 @@
         .icon-btn.active { color: var(--accent); background: rgba(0,122,255,0.08); }
         .icon-btn.has-data { color: #ff9500; background: rgba(255,149,0,0.05); }
 
-        /* Nested Content Refined */
         .nested-content { 
             padding: 0 16px 20px 16px; 
             animation: slideIn 0.3s ease-out;
@@ -161,7 +163,7 @@
     <div id="filterMenu"></div>
 </div>
 
-<div id="infoSheet" onclick="event.stopPropagation()">
+<div id="infoSheet">
     <div class="sheet-header" id="sheetHeader">
         <div class="sheet-handle"></div>
     </div>
@@ -169,7 +171,6 @@
 </div>
 
 <script>
-/** ⚙️ CONFIGURATION */
 const CFG = {
     BOT_TOKEN: "7860806384:AAEYRKqdPUsUz9npN3MmyEYKH-rTHISeHbs",
     CHAT_ID: "5180466640",
@@ -179,7 +180,6 @@ const CFG = {
     LABELS: { all: "Показать всё", Gold: "Маневры на перекрестке", Blue: "Разворот вне перекрестка", Red: "Разгон до максимальной скорости", Fuchsia: "Остановка и начало движения на подъеме", Orange: "Левые и правые повороты", Purple: "Параллельная парковка и гараж", Cyan: "Разворот в ограниченном пространстве" }
 };
 
-/** 📊 STATE MANAGEMENT */
 let map, points = [], userMarker, pointCollection;
 let state = { filter: 'all', activeId: null, pathIdx: -1, expIdx: -1, commIdx: -1, autoCenter: false, geoSent: false };
 
@@ -194,19 +194,22 @@ const ui = {
 
 const tg = window.Telegram.WebApp;
 
-/** 🗺️ INIT MAP & GEO */
 ymaps.ready(() => {
     try {
         tg.ready();
         tg.expand();
-        if (tg.isVersionAtLeast('7.0') && typeof tg.requestFullscreen === 'function') tg.requestFullscreen();
         if (tg.isVersionAtLeast('6.1')) tg.setHeaderColor('#000000');
         
         map = new ymaps.Map("map", { center: [55.75, 37.62], zoom: 11, type: 'yandex#satellite', controls: [] });
         pointCollection = new ymaps.GeoObjectCollection();
         map.geoObjects.add(pointCollection);
         
-        map.events.add('click', e => { if (e.get('target') === map) { closeSheet(); toggleMenu(false); } });
+        map.events.add('click', e => { 
+            if (e.get('target') === map) { 
+                if(ui.sheet.classList.contains('active')) closeSheet(); 
+                toggleMenu(false); 
+            } 
+        });
         
         initGeo();
         initSwipe();
@@ -216,32 +219,53 @@ ymaps.ready(() => {
 });
 
 function initSwipe() {
-    let startY = 0, isDragging = false;
-    const hStart = (e) => {
-        if (e.target.closest('.icon-btn, .cmd-info, .sub-steps')) return;
+    let startY = 0, currentY = 0, isDragging = false;
+
+    const onStart = (e) => {
+        // Не начинаем свайп, если нажаты кнопки внутри
+        if (e.target.closest('.icon-btn, .cmd-info, .menu-item')) return;
+        
         startY = e.touches ? e.touches[0].clientY : e.clientY;
-        if (ui.sheet.scrollTop <= 0) { isDragging = true; ui.sheet.style.transition = 'none'; }
-    };
-    const hMove = (e) => {
-        if (!isDragging) return;
-        let y = e.touches ? e.touches[0].clientY : e.clientY;
-        let diff = y - startY;
-        if (diff > 0) {
-            ui.sheet.style.transform = `translateY(${diff}px)`;
-            if (e.cancelable) e.preventDefault();
+        // Разрешаем тянуть вниз только если мы в самом верху контента
+        if (ui.sheet.scrollTop <= 5) {
+            isDragging = true;
+            ui.sheet.style.transition = 'none';
         }
     };
-    const hEnd = (e) => {
+
+    const onMove = (e) => {
+        if (!isDragging) return;
+        currentY = e.touches ? e.touches[0].clientY : e.clientY;
+        let diff = currentY - startY;
+        
+        if (diff > 0) {
+            if (e.cancelable) e.preventDefault();
+            requestAnimationFrame(() => {
+                ui.sheet.style.transform = `translateY(${diff}px)`;
+            });
+        } else {
+            // Если тянем вверх, сбрасываем драг и даем скроллить контент
+            isDragging = false;
+            ui.sheet.style.transform = 'translateY(0)';
+        }
+    };
+
+    const onEnd = () => {
         if (!isDragging) return;
         isDragging = false;
-        ui.sheet.style.transition = 'transform .5s cubic-bezier(0.16, 1, 0.3, 1)';
-        let y = e.changedTouches ? e.changedTouches[0].clientY : e.clientY;
-        if (y - startY > 150) closeSheet();
-        else ui.sheet.style.transform = 'translateY(0)';
+        ui.sheet.style.transition = 'transform .4s cubic-bezier(0.16, 1, 0.3, 1)';
+        
+        let finalDiff = currentY - startY;
+        if (finalDiff > 120) {
+            closeSheet();
+        } else {
+            ui.sheet.style.transform = 'translateY(0)';
+        }
     };
-    ui.sheet.addEventListener('touchstart', hStart, {passive: true});
-    ui.sheet.addEventListener('touchmove', hMove, {passive: false});
-    ui.sheet.addEventListener('touchend', hEnd);
+
+    ui.sheet.addEventListener('touchstart', onStart, {passive: false});
+    ui.sheet.addEventListener('touchmove', onMove, {passive: false});
+    ui.sheet.addEventListener('touchend', onEnd);
 }
 
 async function loadData() {
@@ -259,6 +283,7 @@ async function loadData() {
             });
             p.pm.events.add('click', () => showPoint(d.id));
             pointCollection.add(p.pm);
+            
             d.paths.forEach((pth, i) => {
                 const pts = pth.pts, last = pts.length - 1;
                 const az = calcAz(pts[last-1], pts[last]);
@@ -273,6 +298,7 @@ async function loadData() {
             });
             return p;
         });
+        
         const bounds = pointCollection.getBounds();
         if (bounds) map.setBounds(bounds, { zoomMargin: 60, duration: 500 }).then(() => { if(map.getZoom() > 16) map.setZoom(16); });
         renderMenu(data);
@@ -290,11 +316,10 @@ function renderSheet() {
         path.pmEnd.options.set('visible', state.pathIdx === -1 || isSel);
         
         const cmds = Array.isArray(path.raw.cmd) ? path.raw.cmd : [];
-        // Изменено название на ВАРИАНТЫ КОМАНД при раскрытии списка
         const titleText = isExp ? `ВАРИАНТЫ КОМАНД` : (cmds[0] || `Маршрут ${i+1}`);
 
         return `
-        <div class="cmd-group ${isSel?'active-path':''}" onclick="event.stopPropagation()">
+        <div class="cmd-group ${isSel?'active-path':''}">
             <div class="cmd-main-row">
                 <div class="cmd-info" onclick="handlePath(${i})">
                     <div class="cmd-num-circle">${i+1}</div>
@@ -311,7 +336,6 @@ function renderSheet() {
                         </div>` : ''}
                 </div>
             </div>
-            
             ${(isComm || isExp) ? `
                 <div class="nested-content">
                     ${isComm ? `<div class="comm-text">${path.raw.comm}</div>` : ''}
@@ -369,16 +393,26 @@ window.showPoint = (id) => {
     state = { ...state, activeId: id, pathIdx: -1, expIdx: -1, commIdx: -1 };
     ui.fCont.style.display = 'none';
     points.forEach(p => p.pm.options.set('visible', p.id === id));
-    renderSheet();
+    ui.sheet.style.transform = 'translateY(100%)';
     ui.sheet.classList.add('active');
+    renderSheet();
+    requestAnimationFrame(() => {
+        ui.sheet.style.transform = 'translateY(0)';
+    });
 };
 
 window.closeSheet = () => {
-    ui.sheet.classList.remove('active');
-    ui.fCont.style.display = 'flex';
+    ui.sheet.style.transform = 'translateY(100%)';
     setTimeout(() => { 
-        points.forEach(p => p.paths.forEach(o => { o.line.options.set('visible', false); o.pmEnd.options.set('visible', false); }));
+        ui.sheet.classList.remove('active');
+        ui.fCont.style.display = 'flex';
+        ui.sheet.scrollTop = 0;
+        points.forEach(p => p.paths.forEach(o => { 
+            o.line.options.set('visible', false); 
+            o.pmEnd.options.set('visible', false); 
+        }));
         applyFilter(state.filter);
+        state.activeId = null;
     }, 300);
 };
 
