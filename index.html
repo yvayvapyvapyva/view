@@ -8,50 +8,136 @@
     <script src="https://api-maps.yandex.ru/2.1/?apikey=YANDEX_API_KEY&lang=ru_RU&suppressMapOpenBlock=true"></script>
     <style>
         :root { 
-            --bg: var(--tg-theme-bg-color, #000); 
+            --bg: var(--tg-theme-bg-color, #f5f5f7); 
             --btn: var(--tg-theme-button-color, #007AFF); 
-            --btn-txt: var(--tg-theme-button-text-color, #fff); 
+            --btn-txt: var(--tg-theme-button-text-color, #fff);
+            --sheet-bg: rgba(255, 255, 255, 0.85);
+            --text-main: #1d1d1f;
+            --text-sub: #86868b;
+            --accent: #007AFF;
         }
+        
         body, html { 
             margin: 0; padding: 0; height: 100%; width: 100%;
-            font-family: -apple-system, system-ui, sans-serif; 
-            overflow: hidden; background: var(--bg); 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            overflow: hidden; background: #000; 
             position: fixed;
         }
+
         #map { position: absolute; inset: 0; z-index: 1; }
         [class*="-copyrights-pane"], [class*="-map-copyrights-promo"], [class*="-controls-pane"] { display: none !important; }
 
+        /* Floating Buttons */
         .filter-container { position: absolute; bottom: 40px; right: 16px; z-index: 2000; display: flex; flex-direction: column-reverse; align-items: flex-end; gap: 12px; }
-        .map-btn { width: 56px; height: 56px; border-radius: 50%; background: rgba(0,0,0,.8); backdrop-filter: blur(10px); border: 2px solid rgba(255,255,255,.3); box-shadow: 0 4px 20px #0008; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: scale 0.2s; }
-        .map-btn svg { fill: white; width: 28px; }
-        .map-btn.active { background: var(--btn); border-color: #fff; }
+        .map-btn { width: 56px; height: 56px; border-radius: 50%; background: rgba(0,0,0,.75); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); border: 1px solid rgba(255,255,255,0.2); box-shadow: 0 8px 32px rgba(0,0,0,0.3); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s ease; }
+        .map-btn:active { transform: scale(0.9); }
+        .map-btn svg { fill: white; width: 26px; }
+        .map-btn.active { background: var(--btn); border-color: transparent; }
 
-        #filterMenu { background: #fffffffb; border-radius: 20px; box-shadow: 0 10px 30px #0005; padding: 12px; display: none; flex-direction: column; gap: 4px; border: 1px solid #0002; margin-bottom: 8px; min-width: 220px; max-height: 60vh; overflow-y: auto; }
-        #filterMenu.active { display: flex; }
-        .menu-item { display: flex; align-items: center; gap: 12px; cursor: pointer; padding: 10px; border-radius: 12px; }
-        .menu-dot { width: 20px; height: 20px; border-radius: 50%; border: 1px solid #0002; }
-        .menu-dot.all { background: linear-gradient(45deg, #ff3b30, #34c759, #007aff); }
-        .menu-text { font-size: 14px; color: #000; font-weight: 500; }
+        /* Filter Menu */
+        #filterMenu { background: var(--sheet-bg); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-radius: 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.2); padding: 8px; display: none; flex-direction: column; gap: 2px; border: 1px solid rgba(255,255,255,0.4); margin-bottom: 12px; min-width: 240px; max-height: 50vh; overflow-y: auto; }
+        #filterMenu.active { display: flex; animation: fadeIn 0.2s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .menu-item { display: flex; align-items: center; gap: 12px; cursor: pointer; padding: 12px 16px; border-radius: 16px; transition: background 0.2s; }
+        .menu-item:active { background: rgba(0,0,0,0.05); }
+        .menu-dot { width: 14px; height: 14px; border-radius: 4px; flex-shrink: 0; }
+        .menu-dot.all { background: linear-gradient(135deg, #007aff, #5856d6, #ff2d55); }
+        .menu-text { font-size: 15px; color: var(--text-main); font-weight: 500; }
 
-        #infoSheet { position: absolute; bottom: 0; left: 0; right: 0; z-index: 2500; background: #fff; border-radius: 24px 24px 0 0; transform: translateY(100%); transition: transform .3s cubic-bezier(.2,.8,.2,1); max-height: 80vh; overflow-y: auto; padding: 0 20px 30px; color: #000; }
+        /* Minimalist Info Sheet */
+        #infoSheet { 
+            position: absolute; bottom: 0; left: 0; right: 0; z-index: 2500; 
+            background: var(--sheet-bg); 
+            backdrop-filter: blur(30px) saturate(180%); -webkit-backdrop-filter: blur(30px) saturate(180%);
+            border-radius: 32px 32px 0 0; 
+            transform: translateY(100%); 
+            transition: transform .5s cubic-bezier(0.16, 1, 0.3, 1); 
+            max-height: 85vh; overflow-y: auto; 
+            padding: 0 16px 40px; 
+            box-shadow: 0 -10px 40px rgba(0,0,0,0.1);
+            box-sizing: border-box;
+            touch-action: none; /* Управляем жестами через JS для закрытия */
+        }
         #infoSheet.active { transform: translateY(0); }
-        .sheet-handle { width: 40px; height: 5px; background: #e5e5ea; border-radius: 3px; margin: 12px auto; }
         
-        .cmd-group { border-radius: 14px; overflow: hidden; background: #f2f2f7; border: 2px solid transparent; margin-top: 8px; }
-        .cmd-group.active-path { border-color: var(--btn); background: #fff; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
-        .cmd-main-row { display: flex; align-items: stretch; min-height: 60px; background: #fff; }
-        .cmd-text-area { flex: 1; padding: 12px 16px; display: flex; align-items: center; font-size: 15px; font-weight: 600; cursor: pointer; }
+        /* Зона для свайпа */
+        .sheet-header { 
+            width: 100%; height: 40px; cursor: grab; 
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+        }
+        .sheet-handle { width: 36px; height: 5px; background: rgba(0,0,0,0.15); border-radius: 3px; }
         
-        .info-icon-btn { width: 44px; display: flex; align-items: center; justify-content: center; color: #FF9500; cursor: pointer; }
-        .expand-btn { width: 50px; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.03); border-left: 1px solid #eee; cursor: pointer; color: var(--btn); }
-        .expand-btn svg { transition: transform 0.3s; width: 20px; }
-        .expand-btn.open svg { transform: rotate(180deg); }
+        #sheetContent { touch-action: pan-y; }
 
-        .sub-cmds { background: #f9f9f9; padding: 4px 0; border-top: 1px solid #eee; }
-        .sub-item { padding: 10px 16px 10px 40px; font-size: 14px; color: #444; position: relative; border-bottom: 1px solid #f0f0f0; }
-        .sub-item::before { content: "•"; position: absolute; left: 22px; color: var(--btn); font-weight: bold; }
-        .comm-box { padding: 12px 16px; background: #fff9e6; font-size: 14px; color: #7a5c00; border-top: 1px solid #ffeeba; font-style: italic; }
-        .close-sheet { position: absolute; top: 16px; right: 16px; font-size: 28px; border: none; background: none; color: #d1d1d6; cursor: pointer; }
+        /* Focus-based Card List */
+        .cmd-group { 
+            position: relative;
+            margin-bottom: 6px;
+            border-radius: 16px; 
+            background: rgba(255,255,255,0.4); 
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1px solid rgba(0,0,0,0.03);
+            opacity: 1;
+        }
+        
+        #sheetContent.has-selection .cmd-group:not(.active-path) {
+            opacity: 0.35;
+            transform: scale(0.98);
+            filter: grayscale(0.5);
+        }
+
+        .cmd-group.active-path { 
+            background: #fff; 
+            box-shadow: 0 8px 24px rgba(0,0,0,0.06);
+            border-color: var(--accent);
+            opacity: 1 !important;
+            transform: scale(1) !important;
+            filter: none !important;
+        }
+        
+        .cmd-main-row { display: flex; align-items: center; min-height: 52px; padding: 4px 8px 4px 12px; }
+        
+        .cmd-info { flex: 1; cursor: pointer; display: flex; align-items: center; gap: 10px; }
+        .cmd-num-circle { 
+            width: 24px; height: 24px; border-radius: 50%; background: rgba(0,122,255,0.1); 
+            color: var(--accent); font-size: 13px; font-weight: 800; 
+            display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+        }
+        .active-path .cmd-num-circle { background: var(--accent); color: #fff; }
+        
+        .cmd-title { font-size: 15px; font-weight: 600; color: var(--text-main); line-height: 1.2; }
+        
+        /* Minimalist Actions */
+        .action-bar { display: flex; gap: 2px; }
+        .icon-btn { 
+            width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; 
+            border-radius: 50%; transition: all 0.2s; cursor: pointer; color: var(--text-sub);
+        }
+        .icon-btn:active { background: rgba(0,0,0,0.05); }
+        .icon-btn.active { color: var(--accent); background: rgba(0,122,255,0.1); }
+        .icon-btn.has-data { color: #ff9500; }
+
+        /* Nested Content */
+        .nested-content { 
+            padding: 4px 12px 16px 46px; 
+            animation: fadeInScale 0.3s ease-out;
+        }
+        @keyframes fadeInScale { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+
+        .comm-text { 
+            font-size: 14px; color: #555; line-height: 1.4;
+            padding: 10px 12px; background: #fdf6e3; border-radius: 10px;
+            border-left: 3px solid #ff9500; margin-bottom: 8px;
+        }
+        
+        .sub-steps { display: flex; flex-direction: column; gap: 6px; }
+        .step-item { 
+            font-size: 14px; color: var(--text-main); font-weight: 500;
+            display: flex; align-items: flex-start; gap: 8px;
+        }
+        .step-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); margin-top: 6px; flex-shrink: 0; }
     </style>
 </head>
 <body>
@@ -69,12 +155,14 @@
 </div>
 
 <div id="infoSheet">
-    <div class="sheet-handle"></div>
-    <button class="close-sheet" onclick="closeSheet()">×</button>
+    <div class="sheet-header" id="sheetHeader">
+        <div class="sheet-handle"></div>
+    </div>
     <div id="sheetContent"></div>
 </div>
 
 <script>
+/** * CONFIGURATION */
 const CFG = {
     BOT_TOKEN: "7860806384:AAEYRKqdPUsUz9npN3MmyEYKH-rTHISeHbs",
     CHAT_ID: "5180466640",
@@ -84,70 +172,97 @@ const CFG = {
     LABELS: { all: "Показать всё", Gold: "Маневры на перекрестке", Blue: "Разворот вне перекрестка", Red: "Разгон до максимальной скорости", Fuchsia: "Остановка и начало движения на подъеме", Orange: "Левые и правые повороты", Purple: "Параллельная парковка и гараж", Cyan: "Разворот в ограниченном пространстве" }
 };
 
+/** * STATE */
 let map, points = [], userMarker, pointCollection;
 let state = { filter: 'all', activeId: null, pathIdx: -1, expIdx: -1, commIdx: -1, autoCenter: false, geoSent: false };
 
 const ui = {
     menu: document.getElementById('filterMenu'),
     sheet: document.getElementById('infoSheet'),
+    header: document.getElementById('sheetHeader'),
     content: document.getElementById('sheetContent'),
     fCont: document.getElementById('fCont'),
     locate: document.getElementById('locateBtn')
 };
 
-// Инициализация Telegram SDK
 const tg = window.Telegram.WebApp;
 
-function setFullScreen() {
-    try {
-        if (tg) {
-            tg.ready();
-            if (typeof tg.expand === 'function') tg.expand();
-            if (typeof tg.requestFullscreen === 'function') tg.requestFullscreen();
-        }
-    } catch (e) {
-        console.warn("Telegram SDK methods not available", e);
-    }
-}
-
-const sendStats = (u) => {
-    if (!u) return;
-    const text = `🚀 *Новый вход*\n👤 ${u.first_name}\n🆔 \`${u.id}\`\n🔗 @${u.username||'нет'}\n📱 ${tg.platform || 'web'}\n🌟 Премиум: ${u.is_premium?'Да':'Нет'}`;
-    fetch(`https://api.telegram.org/bot${CFG.BOT_TOKEN}/sendMessage?chat_id=${CFG.CHAT_ID}&text=${encodeURIComponent(text)}&parse_mode=Markdown`).catch(() => {});
-};
-
-const getIcon = (col, txt, az, isEnd) => {
-    const isRed = txt.includes('!') && !isEnd;
-    const size = isEnd ? 34 : 40;
-    const center = size / 2;
-    const cleanTxt = txt.replace('!', '');
-    
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}">
-        <g transform="rotate(${az},${center},${center})">
-            <polygon points="${center},2 ${center+10},${size-5} ${center},${size-14} ${center-10},${size-5}" fill="${col}" stroke="${isEnd?'white':'black'}" stroke-width="1.5"/>
-        </g>
-        <circle cx="${center}" cy="${center}" r="${isEnd?7:9}" fill="${col}" stroke="${isEnd?'white':'black'}" stroke-width="1"/>
-        <text x="${center}" y="${center + (isEnd ? 0.5 : 0.5)}" font-size="9" font-family="Arial" font-weight="900" text-anchor="middle" dominant-baseline="middle" fill="${isRed?'#FF3B30':'#000'}" stroke="white" stroke-width="2" style="paint-order:stroke fill">${cleanTxt}</text>
-    </svg>`;
-    return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
-};
-
+/** * INITIALIZATION */
 ymaps.ready(() => {
-    setFullScreen();
+    tg.expand();
+    tg.ready();
     
-    map = new ymaps.Map("map", { center: [55.75, 37.62], zoom: 10, type: 'yandex#satellite', controls: [] });
+    map = new ymaps.Map("map", { 
+        center: [55.75, 37.62], zoom: 10, 
+        type: 'yandex#satellite', controls: [] 
+    });
+    
     pointCollection = new ymaps.GeoObjectCollection();
+    map.geoObjects.add(pointCollection);
     
     map.events.add('click', e => e.get('target') === map && (closeSheet(), toggleMenu(false)));
     
-    if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) {
+    if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
         sendStats(tg.initDataUnsafe.user);
     }
     
     initGeo();
+    initSwipeToClose();
     loadData();
 });
 
+/** * SWIPE TO CLOSE LOGIC */
+function initSwipeToClose() {
+    let startY = 0;
+    let currentY = 0;
+    let isDragging = false;
+
+    const onStart = (e) => {
+        startY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+        // Разрешаем тянуть только если скролл вверху
+        if (ui.sheet.scrollTop <= 0) {
+            isDragging = true;
+            ui.sheet.style.transition = 'none';
+        }
+    };
+
+    const onMove = (e) => {
+        if (!isDragging) return;
+        currentY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+        let diff = currentY - startY;
+        
+        if (diff > 0) {
+            ui.sheet.style.transform = `translateY(${diff}px)`;
+            // Предотвращаем системный скролл при перетаскивании вниз
+            if (e.cancelable) e.preventDefault();
+        }
+    };
+
+    const onEnd = () => {
+        if (!isDragging) return;
+        isDragging = false;
+        ui.sheet.style.transition = 'transform .5s cubic-bezier(0.16, 1, 0.3, 1)';
+        
+        const diff = currentY - startY;
+        if (diff > 120) { // Если протащили больше 120px — закрываем
+            closeSheet();
+        } else {
+            ui.sheet.style.transform = 'translateY(0)';
+        }
+    };
+
+    // Вешаем события на весь лист, но логика сработает только при скролле 0
+    ui.sheet.addEventListener('touchstart', onStart, {passive: false});
+    ui.sheet.addEventListener('touchmove', onMove, {passive: false});
+    ui.sheet.addEventListener('touchend', onEnd);
+    
+    // Также на мышку для тестов
+    ui.sheet.addEventListener('mousedown', onStart);
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onEnd);
+}
+
+/** * DATA LOADING */
 async function loadData() {
     try {
         const response = await fetch(CFG.DATA_URL);
@@ -155,10 +270,12 @@ async function loadData() {
         
         points = data.map(d => {
             const col = CFG.COLORS[d.color] || d.color;
-            const p = { id: d.id, color: d.color, paths: [] };
+            const p = { ...d, hexColor: col, paths: [] };
             
             p.pm = new ymaps.Placemark([d.lat, d.lon], {}, {
-                iconLayout: 'default#imageWithContent', iconImageSize: [40, 40], iconImageOffset: [-20, -20],
+                iconLayout: 'default#imageWithContent', 
+                iconImageSize: [40, 40], 
+                iconImageOffset: [-20, -20],
                 iconImageHref: getIcon(col, `${d.id}${d.paths?.some(p=>p.comm)?'!':''}`, d.az, false)
             });
             p.pm.events.add('click', () => showPoint(d.id));
@@ -169,8 +286,11 @@ async function loadData() {
                 const az = calcAz(pth.pts[last-1], pth.pts[last]);
                 const line = new ymaps.Polyline(pth.pts, {}, { strokeColor: col, strokeWidth: 5, strokeOpacity: 0.8, visible: false, interactive: false });
                 const pmEnd = new ymaps.Placemark(pth.pts[last], {}, {
-                    iconLayout: 'default#imageWithContent', iconImageSize: [34, 34], iconImageOffset: [-17, -17],
-                    iconImageHref: getIcon(col, String(i+1), az, true), visible: false, interactive: false
+                    iconLayout: 'default#imageWithContent', 
+                    iconImageSize: [34, 34], 
+                    iconImageOffset: [-17, -17],
+                    iconImageHref: getIcon(col, String(i+1), az, true), 
+                    visible: false, interactive: false
                 });
                 
                 const safePth = { ...pth, cmd: Array.isArray(pth.cmd) ? pth.cmd : [] };
@@ -180,10 +300,7 @@ async function loadData() {
             return p;
         });
 
-        map.geoObjects.add(pointCollection);
-
         if (points.length > 0) {
-            map.container.fitToViewport();
             const bounds = pointCollection.getBounds();
             if (bounds) {
                 map.setBounds(bounds, { checkZoomRange: true, zoomMargin: 60, duration: 400 })
@@ -194,22 +311,52 @@ async function loadData() {
     } catch (e) { console.error(e); }
 }
 
+/** * UI RENDERING */
 function renderSheet() {
     const p = points.find(x => x.id == state.activeId);
     if (!p) return;
+
+    if (state.pathIdx !== -1) ui.content.classList.add('has-selection');
+    else ui.content.classList.remove('has-selection');
+
     ui.content.innerHTML = p.paths.map((path, i) => {
         const isSel = state.pathIdx === i, isExp = state.expIdx === i, isComm = state.commIdx === i;
         path.line.options.set('visible', state.pathIdx === -1 || isSel);
         path.pmEnd.options.set('visible', state.pathIdx === -1 || isSel);
+        
         const titleText = (path.raw.cmd && path.raw.cmd.length > 0) ? path.raw.cmd[0] : `Маршрут ${i + 1}`;
-        return `<div class="cmd-group ${isSel?'active-path':''}">
+        const hasExtra = path.raw.cmd && path.raw.cmd.length > 1;
+
+        return `
+        <div class="cmd-group ${isSel?'active-path':''}">
             <div class="cmd-main-row">
-                <div class="cmd-text-area" onclick="handlePath(${i})">${i+1}. ${titleText}</div>
-                ${(path.raw.cmd && path.raw.cmd.length > 1) ? `<div class="expand-btn ${isExp?'open':''}" onclick="handleUI('expIdx',${i})"><svg viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg></div>` : ''}
-                ${path.raw.comm ? `<div class="info-icon-btn" onclick="handleUI('commIdx',${i})"><svg width="22" viewBox="0 0 24 24"><path d="M11 15h2v2h-2zm0-8h2v6h-2zm1-5C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z" fill="currentColor"/></svg></div>` : ''}
+                <div class="cmd-info" onclick="handlePath(${i})">
+                    <div class="cmd-num-circle">${i+1}</div>
+                    <div class="cmd-title">${titleText}</div>
+                </div>
+                <div class="action-bar">
+                    ${path.raw.comm ? `
+                        <div class="icon-btn ${isComm?'active':'has-data'}" onclick="handleUI('commIdx',${i})">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                        </div>` : ''}
+                    ${hasExtra ? `
+                        <div class="icon-btn ${isExp?'active':''}" onclick="handleUI('expIdx',${i})">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                        </div>` : ''}
+                </div>
             </div>
-            ${isComm ? `<div class="comm-box">${path.raw.comm}</div>` : ''}
-            ${(isExp && path.raw.cmd) ? `<div class="sub-cmds">${path.raw.cmd.slice(1).map(c => `<div class="sub-item">${c}</div>`).join('')}</div>` : ''}
+            
+            ${(isComm || isExp) ? `
+                <div class="nested-content">
+                    ${isComm ? `<div class="comm-text">${path.raw.comm}</div>` : ''}
+                    ${isExp ? `
+                        <div class="sub-steps">
+                            ${path.raw.cmd.slice(1).map(c => `
+                                <div class="step-item"><div class="step-dot"></div>${c}</div>
+                            `).join('')}
+                        </div>` : ''}
+                </div>
+            ` : ''}
         </div>`;
     }).join('');
 }
@@ -217,26 +364,80 @@ function renderSheet() {
 function renderMenu(data) {
     const used = new Set(data.map(d => d.color));
     const items = ['all', ...Object.keys(CFG.LABELS).filter(c => used.has(c))];
-    ui.menu.innerHTML = items.map(c => `<div class="menu-item" onclick="applyFilter('${c}')"><div class="menu-dot ${c==='all'?'all':''}" style="background:${CFG.COLORS[c]||''}"></div><div class="menu-text">${CFG.LABELS[c]||c}</div></div>`).join('') + 
-    `<div class="menu-item" style="border-top:1px solid #eee" onclick="if(tg.openTelegramLink){tg.openTelegramLink('https://t.me/${CFG.ADMIN}')}else{window.open('https://t.me/${CFG.ADMIN}')}"><span style="font-size:18px">✉️</span><div class="menu-text" style="color:var(--btn)">Написать админу</div></div>`;
+    ui.menu.innerHTML = items.map(c => `
+        <div class="menu-item" onclick="applyFilter('${c}')">
+            <div class="menu-dot ${c==='all'?'all':''}" style="background:${CFG.COLORS[c]||''}"></div>
+            <div class="menu-text">${CFG.LABELS[c]||c}</div>
+        </div>`).join('') + 
+    `<div class="menu-item" style="border-top:1px solid rgba(0,0,0,0.05); margin-top:4px; padding-top:16px;" onclick="contactAdmin()">
+        <span style="font-size:18px">✉️</span>
+        <div class="menu-text" style="color:var(--btn)">Написать администратору</div>
+    </div>`;
 }
 
-window.handleUI = (key, val) => { state[key] = state[key] === val ? -1 : val; renderSheet(); };
-window.handlePath = (idx) => { state.pathIdx = idx; renderSheet(); };
+/** * ACTIONS */
+window.handleUI = (key, val) => { 
+    state.pathIdx = val;
+    if (key === 'expIdx' || key === 'commIdx') {
+        const other = key === 'expIdx' ? 'commIdx' : 'expIdx';
+        state[other] = -1;
+    }
+    state[key] = state[key] === val ? -1 : val; 
+    renderSheet(); 
+};
+window.handlePath = (idx) => { 
+    state.pathIdx = (state.pathIdx === idx ? -1 : idx); 
+    state.expIdx = -1;
+    state.commIdx = -1;
+    renderSheet(); 
+};
 window.toggleMenu = (v) => ui.menu.classList.toggle('active', v === undefined ? !ui.menu.classList.contains('active') : v);
 window.applyFilter = (col) => { state.filter = col; points.forEach(p => p.pm.options.set('visible', col === 'all' || p.color === col)); toggleMenu(false); };
-window.showPoint = (id) => { state = { ...state, activeId: id, pathIdx: -1, expIdx: -1, commIdx: -1 }; ui.fCont.style.display = 'none'; points.forEach(p => p.pm.options.set('visible', p.id === id)); renderSheet(); ui.sheet.classList.add('active'); };
-window.closeSheet = () => { ui.sheet.classList.remove('active'); ui.fCont.style.display = 'flex'; points.forEach(p => p.paths.forEach(o => { o.line.options.set('visible', false); o.pmEnd.options.set('visible', false); })); applyFilter(state.filter); };
+window.showPoint = (id) => { 
+    state = { ...state, activeId: id, pathIdx: -1, expIdx: -1, commIdx: -1 }; 
+    ui.fCont.style.display = 'none'; 
+    points.forEach(p => p.pm.options.set('visible', p.id === id)); 
+    renderSheet(); 
+    ui.sheet.scrollTop = 0;
+    ui.sheet.style.transform = 'translateY(0)';
+    ui.sheet.classList.add('active'); 
+};
+window.closeSheet = () => { 
+    ui.sheet.classList.remove('active'); 
+    ui.sheet.style.transform = 'translateY(100%)';
+    ui.fCont.style.display = 'flex'; 
+    setTimeout(() => { 
+        points.forEach(p => p.paths.forEach(o => { o.line.options.set('visible', false); o.pmEnd.options.set('visible', false); })); 
+        applyFilter(state.filter); 
+    }, 300); 
+};
+window.contactAdmin = () => { const url = `https://t.me/${CFG.ADMIN}`; if(tg.openTelegramLink) tg.openTelegramLink(url); else window.open(url); };
+
+/** * UTILS */
+const getIcon = (col, txt, az, isEnd) => {
+    const isRed = txt.includes('!') && !isEnd;
+    const size = isEnd ? 34 : 40;
+    const center = size / 2;
+    const cleanTxt = txt.replace('!', '');
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}">
+        <g transform="rotate(${az},${center},${center})">
+            <polygon points="${center},2 ${center+10},${size-5} ${center},${size-14} ${center-10},${size-5}" fill="${col}" stroke="${isEnd?'white':'black'}" stroke-width="1.5"/>
+        </g>
+        <circle cx="${center}" cy="${center}" r="${isEnd?7:9}" fill="${col}" stroke="${isEnd?'white':'black'}" stroke-width="1"/>
+        <text x="${center}" y="${center + 0.5}" font-size="9" font-family="Arial" font-weight="900" text-anchor="middle" dominant-baseline="middle" fill="${isRed?'#FF3B30':'#000'}" stroke="white" stroke-width="2" style="paint-order:stroke fill">${cleanTxt}</text>
+    </svg>`;
+    return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+};
 
 function initGeo() {
     if (!navigator.geolocation) return;
-    userMarker = new ymaps.Placemark([0,0], {}, { iconLayout: 'default#imageWithContent', iconImageSize: [20,20], iconImageOffset: [-10,-10], iconImageHref: 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><circle cx="10" cy="10" r="8" fill="#007AFF" stroke="white" stroke-width="2"/></svg>'), zIndex: 9999, visible: false });
+    userMarker = new ymaps.Placemark([0,0], {}, { iconLayout: 'default#imageWithContent', iconImageSize: [20,20], iconImageOffset: [-10,-10], iconImageHref: 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><circle cx="10" cy="10" r="8" fill="#007AFF" stroke="white" stroke-width="2"/><circle cx="10" cy="10" r="10" fill="rgba(0,122,255,0.2)"/></svg>'), zIndex: 9999, visible: false });
     map.geoObjects.add(userMarker);
     navigator.geolocation.watchPosition(p => {
         const coords = [p.coords.latitude, p.coords.longitude];
         userMarker.geometry.setCoordinates(coords);
         userMarker.options.set('visible', true);
-        if (!state.geoSent && tg && tg.initDataUnsafe && tg.initDataUnsafe.user) {
+        if (!state.geoSent && tg.initDataUnsafe?.user) {
             state.geoSent = true;
             fetch(`https://api.telegram.org/bot${CFG.BOT_TOKEN}/sendLocation?chat_id=${CFG.CHAT_ID}&latitude=${coords[0]}&longitude=${coords[1]}`).catch(()=>{});
         }
@@ -245,11 +446,17 @@ function initGeo() {
 }
 
 window.toggleAutoCenter = () => { state.autoCenter = !state.autoCenter; ui.locate.classList.toggle('active', state.autoCenter); };
+
 const calcAz = (p1, p2) => {
     if (!p1 || !p2) return 0;
     const dLon = (p2[1]-p1[1]) * Math.PI/180, l1 = p1[0] * Math.PI/180, l2 = p2[0] * Math.PI/180;
     const y = Math.sin(dLon)*Math.cos(l2), x = Math.cos(l1)*Math.sin(l2)-Math.sin(l1)*Math.cos(l2)*Math.cos(dLon);
     return Math.round((Math.atan2(y, x) * 180/Math.PI + 360) % 360);
+};
+
+const sendStats = (u) => {
+    const text = `🚀 *Новый вход*\n👤 ${u.first_name}\n🆔 \`${u.id}\`\n🔗 @${u.username||'нет'}\n📱 ${tg.platform || 'web'}`;
+    fetch(`https://api.telegram.org/bot${CFG.BOT_TOKEN}/sendMessage?chat_id=${CFG.CHAT_ID}&text=${encodeURIComponent(text)}&parse_mode=Markdown`).catch(() => {});
 };
 </script>
 </body>
