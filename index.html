@@ -28,12 +28,14 @@
         #map { position: absolute; inset: 0; z-index: 1; }
         [class*="-copyrights-pane"], [class*="-map-copyrights-promo"], [class*="-controls-pane"] { display: none !important; }
 
+        /* Floating Buttons */
         .filter-container { position: absolute; bottom: 40px; right: 16px; z-index: 2000; display: flex; flex-direction: column-reverse; align-items: flex-end; gap: 12px; }
         .map-btn { width: 56px; height: 56px; border-radius: 50%; background: rgba(0,0,0,.75); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); border: 1px solid rgba(255,255,255,0.2); box-shadow: 0 8px 32px rgba(0,0,0,0.3); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s ease; }
         .map-btn:active { transform: scale(0.9); }
         .map-btn svg { fill: white; width: 26px; }
         .map-btn.active { background: var(--btn); border-color: transparent; }
 
+        /* Filter Menu */
         #filterMenu { background: var(--sheet-bg); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-radius: 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.2); padding: 8px; display: none; flex-direction: column; gap: 2px; border: 1px solid rgba(255,255,255,0.4); margin-bottom: 12px; min-width: 240px; max-height: 50vh; overflow-y: auto; }
         #filterMenu.active { display: flex; animation: fadeIn 0.2s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
@@ -44,6 +46,7 @@
         .menu-dot.all { background: linear-gradient(135deg, #007aff, #5856d6, #ff2d55); }
         .menu-text { font-size: 15px; color: var(--text-main); font-weight: 500; }
 
+        /* Info Sheet */
         #infoSheet { 
             position: absolute; bottom: 0; left: 0; right: 0; z-index: 2500; 
             background: var(--sheet-bg); 
@@ -67,6 +70,7 @@
         }
         .sheet-handle { width: 36px; height: 5px; background: rgba(0,0,0,0.15); border-radius: 3px; }
         
+        /* Command Groups */
         .cmd-group { 
             position: relative;
             margin-bottom: 12px;
@@ -112,6 +116,7 @@
         .icon-btn.active { color: var(--accent); background: rgba(0,122,255,0.08); }
         .icon-btn.has-data { color: #ff9500; background: rgba(255,149,0,0.05); }
 
+        /* Nested Content Refined */
         .nested-content { 
             padding: 0 16px 20px 16px; 
             animation: slideIn 0.3s ease-out;
@@ -127,7 +132,7 @@
         .sub-steps { display: flex; flex-direction: column; gap: 12px; }
         .step-item { 
             font-size: 15px; color: var(--text-main); font-weight: 500;
-            display: flex; align-items: center; gap: 10px;
+            display: flex; align-items: flex-start; gap: 10px;
             line-height: 1.4;
             padding: 8px 12px;
             background: rgba(0,0,0,0.02);
@@ -138,30 +143,13 @@
             background: rgba(0,122,255,0.1); color: var(--accent);
             font-size: 11px; font-weight: 800;
             display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-        }
-        /* TTS Button style */
-        .tts-btn {
-            width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;
-            border-radius: 50%; color: var(--accent); transition: background 0.2s;
-            cursor: pointer; flex-shrink: 0;
-        }
-        .tts-btn:active { background: rgba(0,122,255,0.1); }
-        .tts-btn.speaking { color: #ff3b30; animation: blink 1s infinite; }
-        @keyframes blink { 50% { opacity: 0.5; } }
-        
-        /* Error Toast */
-        #toast {
-            position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%);
-            background: rgba(0,0,0,0.8); color: white; padding: 12px 20px;
-            border-radius: 12px; font-size: 14px; z-index: 9999;
-            display: none; text-align: center; width: 80%;
+            margin-top: 1px;
         }
     </style>
 </head>
 <body>
 
 <div id="map"></div>
-<div id="toast"></div>
 
 <div class="filter-container" id="fCont">
     <div id="filterTrigger" class="map-btn" onclick="toggleMenu()">
@@ -201,81 +189,16 @@ const ui = {
     header: document.getElementById('sheetHeader'),
     content: document.getElementById('sheetContent'),
     fCont: document.getElementById('fCont'),
-    locate: document.getElementById('locateBtn'),
-    toast: document.getElementById('toast')
+    locate: document.getElementById('locateBtn')
 };
 
 const tg = window.Telegram.WebApp;
-
-/** 🎤 SYNTHESIZER SETUP WITH ANDROID FIXES */
-const synth = window.speechSynthesis;
-let voices = [];
-
-function showToast(msg) {
-    ui.toast.innerText = msg;
-    ui.toast.style.display = 'block';
-    setTimeout(() => ui.toast.style.display = 'none', 3000);
-}
-
-// Load voices as soon as they are available
-function loadVoices() {
-    voices = synth.getVoices();
-}
-if (speechSynthesis.onvoiceschanged !== undefined) {
-    speechSynthesis.onvoiceschanged = loadVoices;
-}
-
-function speak(text, btn) {
-    if (!synth) {
-        showToast("Синтез речи недоступен в этом браузере.");
-        return;
-    }
-
-    if (synth.speaking) {
-        synth.cancel();
-        if (btn && btn.classList.contains('speaking')) {
-            btn.classList.remove('speaking');
-            return;
-        }
-    }
-    
-    // Clear other buttons
-    document.querySelectorAll('.tts-btn').forEach(b => b.classList.remove('speaking'));
-    
-    const utterance = new SpeechSynthesisUtterance(text);
-    
-    // Find Russian voice
-    if (voices.length === 0) voices = synth.getVoices();
-    const ruVoice = voices.find(v => v.lang.includes('ru')) || voices[0];
-    if (ruVoice) utterance.voice = ruVoice;
-    
-    utterance.lang = 'ru-RU';
-    utterance.rate = 0.9; // Slightly slower for clarity
-    
-    utterance.onstart = () => btn && btn.classList.add('speaking');
-    utterance.onend = () => btn && btn.classList.remove('speaking');
-    utterance.onerror = (e) => {
-        console.error("TTS Error:", e);
-        btn && btn.classList.remove('speaking');
-        // If it's a "not-allowed" error on Android WebView
-        if (e.error === 'not-allowed') showToast("Нажмите еще раз для активации звука");
-        else showToast("Ошибка синтеза речи. Проверьте настройки Android TTS.");
-    };
-    
-    // Android Fix: Calling cancel before speak sometimes helps "wake up" the engine
-    synth.cancel();
-    setTimeout(() => synth.speak(utterance), 50);
-}
 
 /** 🗺️ INIT MAP & GEO */
 ymaps.ready(() => {
     try {
         tg.ready();
         tg.expand();
-        
-        // Android WebView Hack: Try to trigger voice load on first interaction
-        document.body.addEventListener('click', () => { if(voices.length === 0) loadVoices(); }, { once: true });
-
         if (tg.isVersionAtLeast('7.0') && typeof tg.requestFullscreen === 'function') tg.requestFullscreen();
         if (tg.isVersionAtLeast('6.1')) tg.setHeaderColor('#000000');
         
@@ -295,7 +218,7 @@ ymaps.ready(() => {
 function initSwipe() {
     let startY = 0, isDragging = false;
     const hStart = (e) => {
-        if (e.target.closest('.icon-btn, .cmd-info, .sub-steps, .tts-btn')) return;
+        if (e.target.closest('.icon-btn, .cmd-info, .sub-steps')) return;
         startY = e.touches ? e.touches[0].clientY : e.clientY;
         if (ui.sheet.scrollTop <= 0) { isDragging = true; ui.sheet.style.transition = 'none'; }
     };
@@ -367,6 +290,7 @@ function renderSheet() {
         path.pmEnd.options.set('visible', state.pathIdx === -1 || isSel);
         
         const cmds = Array.isArray(path.raw.cmd) ? path.raw.cmd : [];
+        // Изменено название на ВАРИАНТЫ КОМАНД при раскрытии списка
         const titleText = isExp ? `ВАРИАНТЫ КОМАНД` : (cmds[0] || `Маршрут ${i+1}`);
 
         return `
@@ -397,9 +321,6 @@ function renderSheet() {
                                 <div class="step-item">
                                     <div class="step-num">${idx + 1}</div>
                                     <div style="flex:1">${c}</div>
-                                    <div class="tts-btn" onclick="speak('${c.replace(/'/g, "\\'")}', this)">
-                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
-                                    </div>
                                 </div>
                             `).join('')}
                         </div>` : ''}
@@ -453,7 +374,6 @@ window.showPoint = (id) => {
 };
 
 window.closeSheet = () => {
-    if (synth && synth.speaking) synth.cancel();
     ui.sheet.classList.remove('active');
     ui.fCont.style.display = 'flex';
     setTimeout(() => { 
