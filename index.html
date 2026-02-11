@@ -52,23 +52,37 @@
             background: var(--sheet-bg); 
             backdrop-filter: blur(30px) saturate(180%); -webkit-backdrop-filter: blur(30px) saturate(180%);
             border-radius: 32px 32px 0 0; 
-            transform: translateY(100%); 
-            transition: transform .4s cubic-bezier(0.16, 1, 0.3, 1); 
+            /* Динамическая высота */
+            height: auto;
             max-height: 85vh; 
-            overflow-y: auto; 
+            transform: translateY(110%); 
+            transition: transform .5s cubic-bezier(0.16, 1, 0.3, 1); 
             padding: 0 16px 40px; 
             box-shadow: 0 -10px 40px rgba(0,0,0,0.1);
             box-sizing: border-box;
-            touch-action: pan-y;
             will-change: transform;
+            display: flex;
+            flex-direction: column;
         }
+        
+        /* State: Active (Full view) */
         #infoSheet.active { transform: translateY(0); }
         
-        /* Interactive header to close the sheet */
+        /* State: Collapsed (Only handle visible) */
+        #infoSheet.collapsed { transform: translateY(calc(100% - 56px)); }
+
+        /* Контейнер для скролла контента */
+        #sheetScrollContainer {
+            overflow-y: auto;
+            flex: 1;
+            padding-right: 4px;
+        }
+        
         .sheet-header { 
-            width: 100%; height: 48px; cursor: pointer; 
+            width: 100%; height: 56px; cursor: pointer; 
             display: flex; align-items: center; justify-content: center;
-            position: sticky; top: 0; background: transparent;
+            flex-shrink: 0;
+            background: transparent;
             z-index: 10;
             -webkit-tap-highlight-color: transparent;
         }
@@ -170,11 +184,12 @@
 </div>
 
 <div id="infoSheet">
-    <!-- Click to close header -->
-    <div class="sheet-header" id="sheetHeader" onclick="closeSheet()">
+    <div class="sheet-header" id="sheetHeader" onclick="toggleSheetCollapse()">
         <div class="sheet-handle"></div>
     </div>
-    <div id="sheetContent"></div>
+    <div id="sheetScrollContainer">
+        <div id="sheetContent"></div>
+    </div>
 </div>
 
 <script>
@@ -195,6 +210,7 @@ const ui = {
     sheet: document.getElementById('infoSheet'),
     header: document.getElementById('sheetHeader'),
     content: document.getElementById('sheetContent'),
+    scroll: document.getElementById('sheetScrollContainer'),
     fCont: document.getElementById('fCont'),
     locate: document.getElementById('locateBtn')
 };
@@ -222,7 +238,7 @@ ymaps.ready(() => {
         
         map.events.add('click', e => { 
             if (e.get('target') === map) { 
-                if(ui.sheet.classList.contains('active')) closeSheet(); 
+                if(ui.sheet.classList.contains('active') || ui.sheet.classList.contains('collapsed')) closeSheet(); 
                 toggleMenu(false); 
             } 
         });
@@ -358,26 +374,33 @@ window.showPoint = (id) => {
     state = { ...state, activeId: id, pathIdx: -1, expIdx: -1, commIdx: -1 };
     ui.fCont.style.display = 'none';
     points.forEach(p => p.pm.options.set('visible', p.id === id));
+    ui.sheet.classList.remove('collapsed');
     ui.sheet.classList.add('active');
     renderSheet();
-    requestAnimationFrame(() => {
-        ui.sheet.style.transform = 'translateY(0)';
-    });
+};
+
+window.toggleSheetCollapse = () => {
+    if (ui.sheet.classList.contains('active')) {
+        ui.sheet.classList.remove('active');
+        ui.sheet.classList.add('collapsed');
+    } else if (ui.sheet.classList.contains('collapsed')) {
+        ui.sheet.classList.remove('collapsed');
+        ui.sheet.classList.add('active');
+    }
 };
 
 window.closeSheet = () => {
-    ui.sheet.style.transform = 'translateY(100%)';
+    ui.sheet.classList.remove('active', 'collapsed');
     setTimeout(() => { 
-        ui.sheet.classList.remove('active');
         ui.fCont.style.display = 'flex';
-        ui.sheet.scrollTop = 0;
+        ui.scroll.scrollTop = 0;
         points.forEach(p => p.paths.forEach(o => { 
             o.line.options.set('visible', false); 
             o.pmEnd.options.set('visible', false); 
         }));
         applyFilter(state.filter);
         state.activeId = null;
-    }, 400);
+    }, 500);
 };
 
 window.contactAdmin = () => tg.openTelegramLink(`https://t.me/${CFG.ADMIN}`);
