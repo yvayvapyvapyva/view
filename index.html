@@ -53,11 +53,12 @@
             border-radius: 32px 32px 0 0; 
             transform: translateY(100%); 
             transition: transform .5s cubic-bezier(0.16, 1, 0.3, 1); 
-            max-height: 85vh; overflow-y: auto; 
+            max-height: 85vh; 
+            overflow-y: auto; 
             padding: 0 16px 40px; 
             box-shadow: 0 -10px 40px rgba(0,0,0,0.1);
             box-sizing: border-box;
-            touch-action: none; /* Управляем жестами через JS для закрытия */
+            /* Убрали touch-action: none, чтобы не мешать кликам на iOS */
         }
         #infoSheet.active { transform: translateY(0); }
         
@@ -66,6 +67,7 @@
             width: 100%; height: 40px; cursor: grab; 
             display: flex; align-items: center; justify-content: center;
             flex-shrink: 0;
+            z-index: 10;
         }
         .sheet-handle { width: 36px; height: 5px; background: rgba(0,0,0,0.15); border-radius: 3px; }
         
@@ -154,7 +156,7 @@
     <div id="filterMenu"></div>
 </div>
 
-<div id="infoSheet">
+<div id="infoSheet" onclick="event.stopPropagation()">
     <div class="sheet-header" id="sheetHeader">
         <div class="sheet-handle"></div>
     </div>
@@ -200,7 +202,13 @@ ymaps.ready(() => {
     pointCollection = new ymaps.GeoObjectCollection();
     map.geoObjects.add(pointCollection);
     
-    map.events.add('click', e => e.get('target') === map && (closeSheet(), toggleMenu(false)));
+    // Важно: закрываем только если клик именно по карте
+    map.events.add('click', e => {
+        if (e.get('target') === map) {
+            closeSheet();
+            toggleMenu(false);
+        }
+    });
     
     if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
         sendStats(tg.initDataUnsafe.user);
@@ -218,8 +226,11 @@ function initSwipeToClose() {
     let isDragging = false;
 
     const onStart = (e) => {
+        const target = e.target;
+        // Если клик по кнопке или интерактивному элементу — не инициируем свайп
+        if (target.closest('.icon-btn') || target.closest('.cmd-info')) return;
+
         startY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
-        // Разрешаем тянуть только если скролл вверху
         if (ui.sheet.scrollTop <= 0) {
             isDragging = true;
             ui.sheet.style.transition = 'none';
@@ -233,8 +244,11 @@ function initSwipeToClose() {
         
         if (diff > 0) {
             ui.sheet.style.transform = `translateY(${diff}px)`;
-            // Предотвращаем системный скролл при перетаскивании вниз
             if (e.cancelable) e.preventDefault();
+        } else {
+            // Если тянем вверх — сбрасываем состояние перетаскивания
+            isDragging = false;
+            ui.sheet.style.transform = 'translateY(0)';
         }
     };
 
@@ -244,22 +258,16 @@ function initSwipeToClose() {
         ui.sheet.style.transition = 'transform .5s cubic-bezier(0.16, 1, 0.3, 1)';
         
         const diff = currentY - startY;
-        if (diff > 120) { // Если протащили больше 120px — закрываем
+        if (diff > 150) { // Увеличили порог для исключения случайных срабатываний
             closeSheet();
         } else {
             ui.sheet.style.transform = 'translateY(0)';
         }
     };
 
-    // Вешаем события на весь лист, но логика сработает только при скролле 0
-    ui.sheet.addEventListener('touchstart', onStart, {passive: false});
+    ui.sheet.addEventListener('touchstart', onStart, {passive: true});
     ui.sheet.addEventListener('touchmove', onMove, {passive: false});
     ui.sheet.addEventListener('touchend', onEnd);
-    
-    // Также на мышку для тестов
-    ui.sheet.addEventListener('mousedown', onStart);
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onEnd);
 }
 
 /** * DATA LOADING */
@@ -328,19 +336,19 @@ function renderSheet() {
         const hasExtra = path.raw.cmd && path.raw.cmd.length > 1;
 
         return `
-        <div class="cmd-group ${isSel?'active-path':''}">
+        <div class="cmd-group ${isSel?'active-path':''}" onclick="event.stopPropagation()">
             <div class="cmd-main-row">
-                <div class="cmd-info" onclick="handlePath(${i})">
+                <div class="cmd-info" onclick="handlePath(event, ${i})">
                     <div class="cmd-num-circle">${i+1}</div>
                     <div class="cmd-title">${titleText}</div>
                 </div>
                 <div class="action-bar">
                     ${path.raw.comm ? `
-                        <div class="icon-btn ${isComm?'active':'has-data'}" onclick="handleUI('commIdx',${i})">
+                        <div class="icon-btn ${isComm?'active':'has-data'}" onclick="handleUI(event, 'commIdx', ${i})">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
                         </div>` : ''}
                     ${hasExtra ? `
-                        <div class="icon-btn ${isExp?'active':''}" onclick="handleUI('expIdx',${i})">
+                        <div class="icon-btn ${isExp?'active':''}" onclick="handleUI(event, 'expIdx', ${i})">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
                         </div>` : ''}
                 </div>
@@ -376,7 +384,8 @@ function renderMenu(data) {
 }
 
 /** * ACTIONS */
-window.handleUI = (key, val) => { 
+window.handleUI = (e, key, val) => { 
+    if(e) e.stopPropagation();
     state.pathIdx = val;
     if (key === 'expIdx' || key === 'commIdx') {
         const other = key === 'expIdx' ? 'commIdx' : 'expIdx';
@@ -385,13 +394,16 @@ window.handleUI = (key, val) => {
     state[key] = state[key] === val ? -1 : val; 
     renderSheet(); 
 };
-window.handlePath = (idx) => { 
+window.handlePath = (e, idx) => { 
+    if(e) e.stopPropagation();
     state.pathIdx = (state.pathIdx === idx ? -1 : idx); 
     state.expIdx = -1;
     state.commIdx = -1;
     renderSheet(); 
 };
-window.toggleMenu = (v) => ui.menu.classList.toggle('active', v === undefined ? !ui.menu.classList.contains('active') : v);
+window.toggleMenu = (v) => {
+    ui.menu.classList.toggle('active', v === undefined ? !ui.menu.classList.contains('active') : v);
+};
 window.applyFilter = (col) => { state.filter = col; points.forEach(p => p.pm.options.set('visible', col === 'all' || p.color === col)); toggleMenu(false); };
 window.showPoint = (id) => { 
     state = { ...state, activeId: id, pathIdx: -1, expIdx: -1, commIdx: -1 }; 
