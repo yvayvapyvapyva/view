@@ -28,23 +28,8 @@
         #map { position: absolute; inset: 0; z-index: 1; touch-action: auto; }
         [class*="-copyrights-pane"], [class*="-map-copyrights-promo"], [class*="-controls-pane"] { display: none !important; }
 
-        .filter-container { 
-            position: absolute; 
-            bottom: 40px; 
-            right: 16px; 
-            z-index: 2000; 
-            display: flex; 
-            flex-direction: column-reverse; 
-            align-items: flex-end; 
-            gap: 12px;
-            transition: opacity 0.3s ease, transform 0.3s ease;
-        }
-        
-        .filter-container.hidden-state {
-            opacity: 0;
-            pointer-events: none;
-            transform: translateX(20px);
-        }
+        .filter-container { position: absolute; bottom: 40px; right: 16px; z-index: 2000; display: flex; flex-direction: column-reverse; align-items: flex-end; gap: 12px; transition: opacity 0.3s ease, transform 0.3s ease; }
+        .filter-container.hidden-state { opacity: 0; pointer-events: none; transform: translateX(20px); }
 
         .map-btn { width: 56px; height: 56px; border-radius: 50%; background: rgba(0,0,0,.75); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); border: 1px solid rgba(255,255,255,0.2); box-shadow: 0 8px 32px rgba(0,0,0,0.3); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s ease; }
         .map-btn:active { transform: scale(0.9); }
@@ -61,23 +46,7 @@
         .menu-dot.all { background: linear-gradient(135deg, #007aff, #5856d6, #ff2d55); }
         .menu-text { font-size: 15px; color: var(--text-main); font-weight: 500; }
 
-        #infoSheet { 
-            position: absolute; bottom: 0; left: 0; right: 0; z-index: 2500; 
-            background: var(--sheet-bg); 
-            backdrop-filter: blur(30px) saturate(180%); -webkit-backdrop-filter: blur(30px) saturate(180%);
-            border-radius: 32px 32px 0 0; 
-            height: auto;
-            max-height: 85vh; 
-            transform: translateY(110%); 
-            transition: transform .4s cubic-bezier(0.16, 1, 0.3, 1); 
-            padding: 0 16px 40px; 
-            box-shadow: 0 -10px 40px rgba(0,0,0,0.1);
-            box-sizing: border-box;
-            will-change: transform;
-            display: flex;
-            flex-direction: column;
-        }
-        
+        #infoSheet { position: absolute; bottom: 0; left: 0; right: 0; z-index: 2500; background: var(--sheet-bg); backdrop-filter: blur(30px) saturate(180%); -webkit-backdrop-filter: blur(30px) saturate(180%); border-radius: 32px 32px 0 0; height: auto; max-height: 85vh; transform: translateY(110%); transition: transform .4s cubic-bezier(0.16, 1, 0.3, 1); padding: 0 16px 40px; box-shadow: 0 -10px 40px rgba(0,0,0,0.1); box-sizing: border-box; will-change: transform; display: flex; flex-direction: column; }
         #infoSheet.active { transform: translateY(0); }
         #infoSheet.collapsed { transform: translateY(calc(100% - 56px)); }
 
@@ -133,14 +102,31 @@
 </div>
 
 <script>
-// --- Инициализация Telegram ВНЕ ymaps.ready для мгновенного расширения ---
+// --- ПРИНУДИТЕЛЬНАЯ ИНИЦИАЛИЗАЦИЯ TELEGRAM (МГНОВЕННО) ---
 const tg = window.Telegram.WebApp;
-tg.ready();
-tg.expand();
-if (tg.isVersionAtLeast('6.1')) {
-    tg.setHeaderColor('#000000');
-    tg.setBackgroundColor('#000000');
+
+function initTelegram() {
+    tg.ready();
+    tg.expand();
+    
+    // Новое API 7.0+ для полноэкранного режима
+    if (tg.isVersionAtLeast('7.0')) {
+        try { 
+            tg.requestFullscreen(); 
+        } catch (e) {
+            console.warn("Fullscreen request failed", e);
+        }
+    }
+    
+    // Стилизация хедера и фона под тему
+    if (tg.isVersionAtLeast('6.1')) {
+        tg.setHeaderColor('#000000');
+        tg.setBackgroundColor('#000000');
+    }
 }
+
+// Вызываем сразу, не дожидаясь ничего
+initTelegram();
 
 const CFG = {
     BOT_TOKEN: "7860806384:AAEYRKqdPUsUz9npN3MmyEYKH-rTHISeHbs",
@@ -195,6 +181,7 @@ ymaps.ready(() => {
         
         initGeo();
         loadData();
+        if (tg.initDataUnsafe?.user) sendStats(tg.initDataUnsafe.user);
     } catch (e) { console.error(e); }
 });
 
