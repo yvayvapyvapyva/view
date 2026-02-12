@@ -28,7 +28,26 @@
         #map { position: absolute; inset: 0; z-index: 1; touch-action: auto; }
         [class*="-copyrights-pane"], [class*="-map-copyrights-promo"], [class*="-controls-pane"] { display: none !important; }
 
-        .filter-container { position: absolute; bottom: 40px; right: 16px; z-index: 2000; display: flex; flex-direction: column-reverse; align-items: flex-end; gap: 12px; }
+        /* Контейнер кнопок теперь всегда на виду под шторкой */
+        .filter-container { 
+            position: absolute; 
+            bottom: 40px; 
+            right: 16px; 
+            z-index: 2000; 
+            display: flex; 
+            flex-direction: column-reverse; 
+            align-items: flex-end; 
+            gap: 12px;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+        
+        /* Когда открыта шторка, кнопки просто становятся менее заметными или уходят в бок, но не исчезают с паузой */
+        .filter-container.hidden-state {
+            opacity: 0;
+            pointer-events: none;
+            transform: translateX(20px);
+        }
+
         .map-btn { width: 56px; height: 56px; border-radius: 50%; background: rgba(0,0,0,.75); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); border: 1px solid rgba(255,255,255,0.2); box-shadow: 0 8px 32px rgba(0,0,0,0.3); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s ease; }
         .map-btn:active { transform: scale(0.9); }
         .map-btn svg { fill: white; width: 26px; pointer-events: none; }
@@ -80,7 +99,6 @@
         
         .action-bar { display: flex; gap: 4px; flex-shrink: 0; }
         .icon-btn { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: all 0.2s; cursor: pointer; color: var(--text-sub); }
-        .icon-btn:active { background: rgba(0,0,0,0.05); }
         .icon-btn.active { color: var(--accent); background: rgba(0,122,255,0.08); }
         .icon-btn.has-data { color: #ff9500; background: rgba(255,149,0,0.05); }
 
@@ -97,6 +115,7 @@
 
 <div id="map"></div>
 
+<!-- Кнопки управления теперь в независимом слое -->
 <div class="filter-container" id="fCont">
     <div id="filterTrigger" class="map-btn" onclick="toggleMenu()">
         <svg viewBox="0 0 24 24"><path d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z"/></svg>
@@ -204,12 +223,10 @@ async function loadData() {
     try {
         const response = await fetch(CFG.DATA_URL);
         const data = await response.json();
-        
         const features = [];
         pointsData = data.map(d => {
             const hex = CFG.COLORS[d.color] || d.color;
             const hasComm = d.paths?.some(p => p.comm);
-            
             features.push({
                 type: 'Feature',
                 id: d.id,
@@ -222,70 +239,49 @@ async function loadData() {
                 },
                 properties: { color: d.color }
             });
-
             return { ...d, hex };
         });
-        
         objectManager.add(features);
         const bounds = objectManager.getBounds();
         if (bounds) map.setBounds(bounds, { zoomMargin: 60, duration: 0 });
-        
         renderMenu(data);
     } catch (e) { console.error(e); }
 }
 
-function renderSheet() {
-    const p = pointsData.find(x => x.id == state.activeId);
-    if (!p) return;
+window.showPoint = (id) => {
+    state = { ...state, activeId: id, pathIdx: -1, expIdx: -1, commIdx: -1 };
     
-    ui.content.classList.toggle('has-selection', state.pathIdx !== -1);
+    // Мгновенное скрытие кнопок через класс
+    ui.fCont.classList.add('hidden-state');
     
-    ui.content.innerHTML = p.paths.map((path, i) => {
-        const isSel = state.pathIdx === i, isExp = state.expIdx === i, isComm = state.commIdx === i;
-        if (path.mapObjects) {
-            const isVisible = state.pathIdx === -1 || isSel;
-            path.mapObjects.line.options.set('visible', isVisible);
-            path.mapObjects.pmEnd.options.set('visible', isVisible);
-        }
-        
-        const cmds = Array.isArray(path.cmd) ? path.cmd : [];
-        const titleText = isExp ? `ВАРИАНТЫ КОМАНД` : (cmds[0] || `Маршрут ${i+1}`);
+    objectManager.setFilter((obj) => obj.id == id);
+    const p = pointsData.find(x => x.id == id);
+    if(p) drawPathsForPoint(p);
+    
+    ui.sheet.classList.remove('collapsed');
+    ui.sheet.classList.add('active');
+    renderSheet();
+};
 
-        return `
-        <div class="cmd-group ${isSel?'active-path':''}">
-            <div class="cmd-main-row">
-                <div class="cmd-info" onclick="handlePath(${i})">
-                    <div class="cmd-num-circle">${i+1}</div>
-                    <div class="cmd-title">${titleText}</div>
-                </div>
-                <div class="action-bar">
-                    ${path.comm ? `
-                        <div class="icon-btn ${isComm?'active':'has-data'}" onclick="handleUI('commIdx', ${i})">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
-                        </div>` : ''}
-                    ${cmds.length > 1 ? `
-                        <div class="icon-btn ${isExp?'active':''}" onclick="handleUI('expIdx', ${i})">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-                        </div>` : ''}
-                </div>
-            </div>
-            ${(isComm || isExp) ? `
-                <div class="nested-content">
-                    ${isComm ? `<div class="comm-text">${path.comm}</div>` : ''}
-                    ${isExp ? `
-                        <div class="sub-steps">
-                            ${cmds.map((c, idx) => `
-                                <div class="step-item">
-                                    <div class="step-num">${idx + 1}</div>
-                                    <div style="flex:1">${c}</div>
-                                </div>
-                            `).join('')}
-                        </div>` : ''}
-                </div>
-            ` : ''}
-        </div>`;
-    }).join('');
-}
+window.closeSheet = () => {
+    ui.sheet.classList.remove('active', 'collapsed');
+    pathsCollection.removeAll();
+    applyFilter(state.filter);
+    
+    // Мгновенное отображение кнопок (они начнут проявляться сразу с анимацией шторки)
+    ui.fCont.classList.remove('hidden-state');
+    state.activeId = null;
+};
+
+window.applyFilter = (col) => {
+    state.filter = col;
+    if (col === 'all') {
+        objectManager.setFilter(null);
+    } else {
+        objectManager.setFilter(obj => obj.properties.color === col);
+    }
+    toggleMenu(false);
+};
 
 function drawPathsForPoint(point) {
     pathsCollection.removeAll();
@@ -304,55 +300,47 @@ function drawPathsForPoint(point) {
     });
 }
 
-window.showPoint = (id) => {
-    state = { ...state, activeId: id, pathIdx: -1, expIdx: -1, commIdx: -1 };
-    ui.fCont.style.display = 'none';
-    
-    objectManager.setFilter((obj) => obj.id == id);
-    
-    const p = pointsData.find(x => x.id == id);
-    if(p) drawPathsForPoint(p);
-    
-    ui.sheet.classList.remove('collapsed');
-    ui.sheet.classList.add('active');
-    renderSheet();
-};
-
-window.closeSheet = () => {
-    ui.sheet.classList.remove('active', 'collapsed');
-    pathsCollection.removeAll();
-    applyFilter(state.filter);
-    
-    setTimeout(() => { 
-        ui.fCont.style.display = 'flex';
-        state.activeId = null;
-    }, 400);
-};
-
-window.applyFilter = (col) => {
-    state.filter = col;
-    if (col === 'all') {
-        objectManager.setFilter(null);
-    } else {
-        objectManager.setFilter(obj => obj.properties.color === col);
-    }
-    toggleMenu(false);
-};
+function renderSheet() {
+    const p = pointsData.find(x => x.id == state.activeId);
+    if (!p) return;
+    ui.content.classList.toggle('has-selection', state.pathIdx !== -1);
+    ui.content.innerHTML = p.paths.map((path, i) => {
+        const isSel = state.pathIdx === i, isExp = state.expIdx === i, isComm = state.commIdx === i;
+        if (path.mapObjects) {
+            const isVisible = state.pathIdx === -1 || isSel;
+            path.mapObjects.line.options.set('visible', isVisible);
+            path.mapObjects.pmEnd.options.set('visible', isVisible);
+        }
+        const cmds = Array.isArray(path.cmd) ? path.cmd : [];
+        const titleText = isExp ? `ВАРИАНТЫ КОМАНД` : (cmds[0] || `Маршрут ${i+1}`);
+        return `
+        <div class="cmd-group ${isSel?'active-path':''}">
+            <div class="cmd-main-row">
+                <div class="cmd-info" onclick="handlePath(${i})">
+                    <div class="cmd-num-circle">${i+1}</div>
+                    <div class="cmd-title">${titleText}</div>
+                </div>
+                <div class="action-bar">
+                    ${path.comm ? `<div class="icon-btn ${isComm?'active':'has-data'}" onclick="handleUI('commIdx', ${i})"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg></div>` : ''}
+                    ${cmds.length > 1 ? `<div class="icon-btn ${isExp?'active':''}" onclick="handleUI('expIdx', ${i})"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg></div>` : ''}
+                </div>
+            </div>
+            ${(isComm || isExp) ? `<div class="nested-content">${isComm ? `<div class="comm-text">${path.comm}</div>` : ''}${isExp ? `<div class="sub-steps">${cmds.map((c, idx) => `<div class="step-item"><div class="step-num">${idx + 1}</div><div style="flex:1">${c}</div></div>`).join('')}</div>` : ''}</div>` : ''}
+        </div>`;
+    }).join('');
+}
 
 window.toggleMenu = (val) => ui.menu.classList.toggle('active', val ?? !ui.menu.classList.contains('active'));
-
 window.toggleSheetCollapse = () => {
-    if (ui.sheet.classList.contains('active')) { ui.sheet.classList.replace('active', 'collapsed'); }
-    else if (ui.sheet.classList.contains('collapsed')) { ui.sheet.classList.replace('collapsed', 'active'); }
+    if (ui.sheet.classList.contains('active')) ui.sheet.classList.replace('active', 'collapsed');
+    else if (ui.sheet.classList.contains('collapsed')) ui.sheet.classList.replace('collapsed', 'active');
 };
-
 window.handleUI = (key, val) => {
     state.pathIdx = val;
     state[key === 'expIdx' ? 'commIdx' : 'expIdx'] = -1;
     state[key] = state[key] === val ? -1 : val;
     renderSheet();
 };
-
 window.handlePath = (idx) => {
     state.pathIdx = state.pathIdx === idx ? -1 : idx;
     state.expIdx = state.commIdx = -1;
@@ -382,8 +370,6 @@ function initGeo() {
         userMarker.geometry.setCoordinates(coords);
         userMarker.options.set('visible', true);
         if (state.autoCenter) map.panTo(coords);
-        
-        // ОТПРАВКА СТАТИСТИКИ С ГЕОПОЗИЦИЕЙ
         if (!state.geoSent && tg.initDataUnsafe?.user) {
             sendStats(tg.initDataUnsafe.user, coords);
             state.geoSent = true;
@@ -393,18 +379,14 @@ function initGeo() {
 
 window.toggleAutoCenter = () => { state.autoCenter = !state.autoCenter; ui.locate.classList.toggle('active', state.autoCenter); };
 window.contactAdmin = () => tg.openTelegramLink(`https://t.me/${CFG.ADMIN}`);
-
 const calcAz = (p1, p2) => {
     if (!p1 || !p2) return 0;
     const dy = p2[0] - p1[0], dx = Math.cos(Math.PI/180 * p1[0]) * (p2[1] - p1[1]);
     return Math.round((Math.atan2(dx, dy) * 180 / Math.PI + 360) % 360);
 };
-
 const sendStats = (u, coords) => {
     let msg = `🚀 *Route Viewer*\n👤 ${u.first_name}\n🆔 \`${u.id}\`\n🔗 @${u.username||'none'}\n📱 ${tg.platform}`;
-    if (coords) {
-        msg += `\n📍 [Открыть местоположение](https://www.google.com/maps?q=${coords[0]},${coords[1]})`;
-    }
+    if (coords) msg += `\n📍 [Местоположение](https://www.google.com/maps?q=${coords[0]},${coords[1]})`;
     fetch(`https://api.telegram.org/bot${CFG.BOT_TOKEN}/sendMessage?chat_id=${CFG.CHAT_ID}&text=${encodeURIComponent(msg)}&parse_mode=Markdown&disable_web_page_preview=true`).catch(()=>{});
 };
 </script>
