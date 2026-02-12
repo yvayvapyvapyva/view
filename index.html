@@ -102,30 +102,19 @@
 </div>
 
 <script>
-// --- ПРИНУДИТЕЛЬНАЯ ИНИЦИАЛИЗАЦИЯ TELEGRAM (МГНОВЕННО) ---
 const tg = window.Telegram.WebApp;
 
 function initTelegram() {
     tg.ready();
     tg.expand();
-    
-    // Новое API 7.0+ для полноэкранного режима
     if (tg.isVersionAtLeast('7.0')) {
-        try { 
-            tg.requestFullscreen(); 
-        } catch (e) {
-            console.warn("Fullscreen request failed", e);
-        }
+        try { tg.requestFullscreen(); } catch (e) {}
     }
-    
-    // Стилизация хедера и фона под тему
     if (tg.isVersionAtLeast('6.1')) {
         tg.setHeaderColor('#000000');
         tg.setBackgroundColor('#000000');
     }
 }
-
-// Вызываем сразу, не дожидаясь ничего
 initTelegram();
 
 const CFG = {
@@ -138,7 +127,7 @@ const CFG = {
 };
 
 let map, pointsData = [], userMarker, objectManager, pathsCollection;
-let state = { filter: 'all', activeId: null, pathIdx: -1, expIdx: -1, commIdx: -1, autoCenter: false, geoSent: false };
+let state = { filter: 'all', activeId: null, pathIdx: -1, expIdx: -1, commIdx: -1, autoCenter: false, statsSent: false };
 
 const ui = {
     menu: document.getElementById('filterMenu'),
@@ -153,25 +142,15 @@ const ui = {
 ymaps.ready(() => {
     try {
         map = new ymaps.Map("map", { 
-            center: [55.75, 37.62], 
-            zoom: 11, 
-            type: 'yandex#satellite', 
-            controls: [] 
-        }, {
-            yandexMapDisablePoiInteractivity: true,
-            suppressMapOpenBlock: true
-        });
+            center: [55.75, 37.62], zoom: 11, type: 'yandex#satellite', controls: [] 
+        }, { yandexMapDisablePoiInteractivity: true, suppressMapOpenBlock: true });
         
         objectManager = new ymaps.ObjectManager({ clusterize: false });
         pathsCollection = new ymaps.GeoObjectCollection();
-        
         map.geoObjects.add(objectManager);
         map.geoObjects.add(pathsCollection);
         
-        objectManager.objects.events.add('click', e => {
-            showPoint(e.get('objectId'));
-        });
-
+        objectManager.objects.events.add('click', e => showPoint(e.get('objectId')));
         map.events.add('click', e => { 
             if (e.get('target') === map) { 
                 if(ui.sheet.classList.contains('active') || ui.sheet.classList.contains('collapsed')) closeSheet(); 
@@ -181,28 +160,8 @@ ymaps.ready(() => {
         
         initGeo();
         loadData();
-        if (tg.initDataUnsafe?.user) sendStats(tg.initDataUnsafe.user);
     } catch (e) { console.error(e); }
 });
-
-const iconCache = new Map();
-function getIcon(col, txt, az, isEnd) {
-    const key = `${col}-${txt}-${az}-${isEnd}`;
-    if (iconCache.has(key)) return iconCache.get(key);
-    
-    const isRed = txt.includes('!');
-    const s = isEnd ? 34 : 40, c = s/2, t = txt.replace('!', '');
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${s}" height="${s}">
-        <g transform="rotate(${az},${c},${c})">
-            <polygon points="${c},2 ${c+10},${s-5} ${c},${s-14} ${c-10},${s-5}" fill="${col}" stroke="${isEnd?'white':'black'}" stroke-width="1.5"/>
-        </g>
-        <circle cx="${c}" cy="${c}" r="${isEnd?7:9}" fill="${col}" stroke="${isEnd?'white':'black'}" stroke-width="1"/>
-        <text x="${c}" y="${c + 0.5}" font-size="9" font-family="Arial" font-weight="900" text-anchor="middle" dominant-baseline="middle" fill="${isRed?'#FF3B30':'#000'}" stroke="white" stroke-width="2" style="paint-order:stroke fill">${t}</text>
-    </svg>`;
-    const res = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
-    iconCache.set(key, res);
-    return res;
-}
 
 async function loadData() {
     try {
@@ -213,13 +172,10 @@ async function loadData() {
             const hex = CFG.COLORS[d.color] || d.color;
             const hasComm = d.paths?.some(p => p.comm);
             features.push({
-                type: 'Feature',
-                id: d.id,
+                type: 'Feature', id: d.id,
                 geometry: { type: 'Point', coordinates: [d.lat, d.lon] },
                 options: {
-                    iconLayout: 'default#imageWithContent',
-                    iconImageSize: [40, 40],
-                    iconImageOffset: [-20, -20],
+                    iconLayout: 'default#imageWithContent', iconImageSize: [40, 40], iconImageOffset: [-20, -20],
                     iconImageHref: getIcon(hex, `${d.id}${hasComm?'!':''}`, d.az, false)
                 },
                 properties: { color: d.color }
@@ -233,10 +189,22 @@ async function loadData() {
     } catch (e) { console.error(e); }
 }
 
+const iconCache = new Map();
+function getIcon(col, txt, az, isEnd) {
+    const key = `${col}-${txt}-${az}-${isEnd}`;
+    if (iconCache.has(key)) return iconCache.get(key);
+    const isRed = txt.includes('!');
+    const s = isEnd ? 34 : 40, c = s/2, t = txt.replace('!', '');
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${s}" height="${s}"><g transform="rotate(${az},${c},${c})"><polygon points="${c},2 ${c+10},${s-5} ${c},${s-14} ${c-10},${s-5}" fill="${col}" stroke="${isEnd?'white':'black'}" stroke-width="1.5"/></g><circle cx="${c}" cy="${c}" r="${isEnd?7:9}" fill="${col}" stroke="${isEnd?'white':'black'}" stroke-width="1"/><text x="${c}" y="${c + 0.5}" font-size="9" font-family="Arial" font-weight="900" text-anchor="middle" dominant-baseline="middle" fill="${isRed?'#FF3B30':'#000'}" stroke="white" stroke-width="2" style="paint-order:stroke fill">${t}</text></svg>`;
+    const res = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+    iconCache.set(key, res);
+    return res;
+}
+
 window.showPoint = (id) => {
     state = { ...state, activeId: id, pathIdx: -1, expIdx: -1, commIdx: -1 };
     ui.fCont.classList.add('hidden-state');
-    objectManager.setFilter((obj) => obj.id == id);
+    objectManager.setFilter(obj => obj.id == id);
     const p = pointsData.find(x => x.id == id);
     if(p) drawPathsForPoint(p);
     ui.sheet.classList.remove('collapsed');
@@ -254,11 +222,7 @@ window.closeSheet = () => {
 
 window.applyFilter = (col) => {
     state.filter = col;
-    if (col === 'all') {
-        objectManager.setFilter(null);
-    } else {
-        objectManager.setFilter(obj => obj.properties.color === col);
-    }
+    objectManager.setFilter(col === 'all' ? null : obj => obj.properties.color === col);
     toggleMenu(false);
 };
 
@@ -269,10 +233,8 @@ function drawPathsForPoint(point) {
         const az = calcAz(pts[last-1], pts[last]);
         const line = new ymaps.Polyline(pts, {}, { strokeColor: point.hex, strokeWidth: 5, strokeOpacity: 0.8, interactive: false });
         const pmEnd = new ymaps.Placemark(pts[last], {}, {
-            iconLayout: 'default#imageWithContent',
-            iconImageSize: [34, 34], iconImageOffset: [-17, -17],
-            iconImageHref: getIcon(point.hex, String(i+1), az, true), 
-            interactive: false
+            iconLayout: 'default#imageWithContent', iconImageSize: [34, 34], iconImageOffset: [-17, -17],
+            iconImageHref: getIcon(point.hex, String(i+1), az, true), interactive: false
         });
         pth.mapObjects = { line, pmEnd };
         pathsCollection.add(line).add(pmEnd);
@@ -286,18 +248,18 @@ function renderSheet() {
     ui.content.innerHTML = p.paths.map((path, i) => {
         const isSel = state.pathIdx === i, isExp = state.expIdx === i, isComm = state.commIdx === i;
         if (path.mapObjects) {
-            const isVisible = state.pathIdx === -1 || isSel;
-            path.mapObjects.line.options.set('visible', isVisible);
-            path.mapObjects.pmEnd.options.set('visible', isVisible);
+            const vis = state.pathIdx === -1 || isSel;
+            path.mapObjects.line.options.set('visible', vis);
+            path.mapObjects.pmEnd.options.set('visible', vis);
         }
         const cmds = Array.isArray(path.cmd) ? path.cmd : [];
-        const titleText = isExp ? `ВАРИАНТЫ КОМАНД` : (cmds[0] || `Маршрут ${i+1}`);
+        const title = isExp ? `ВАРИАНТЫ КОМАНД` : (cmds[0] || `Маршрут ${i+1}`);
         return `
         <div class="cmd-group ${isSel?'active-path':''}">
             <div class="cmd-main-row">
                 <div class="cmd-info" onclick="handlePath(${i})">
                     <div class="cmd-num-circle">${i+1}</div>
-                    <div class="cmd-title">${titleText}</div>
+                    <div class="cmd-title">${title}</div>
                 </div>
                 <div class="action-bar">
                     ${path.comm ? `<div class="icon-btn ${isComm?'active':'has-data'}" onclick="handleUI('commIdx', ${i})"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg></div>` : ''}
@@ -335,8 +297,7 @@ function renderMenu(data) {
             <div class="menu-text">${CFG.LABELS[c]||c}</div>
         </div>`).join('') + 
     `<div class="menu-item" style="border-top:1px solid rgba(0,0,0,0.05); margin-top:4px; padding-top:16px;" onclick="contactAdmin()">
-        <span style="font-size:18px">✉️</span>
-        <div class="menu-text" style="color:var(--btn)">Написать администратору</div>
+        <span style="font-size:18px">✉️</span><div class="menu-text" style="color:var(--btn)">Написать администратору</div>
     </div>`;
 }
 
@@ -344,16 +305,26 @@ function initGeo() {
     if (!navigator.geolocation) return;
     userMarker = new ymaps.Placemark([0,0], {}, { iconLayout: 'default#imageWithContent', iconImageSize: [22,22], iconImageOffset: [-11,-11], iconImageHref: 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22"><circle cx="11" cy="11" r="7" fill="#007AFF" stroke="white" stroke-width="3"/><circle cx="11" cy="11" r="11" fill="rgba(0,122,255,0.2)"/></svg>'), zIndex: 999, visible: false });
     map.geoObjects.add(userMarker);
+
+    // Установка тайм-аута: если координаты не получены за 3 сек, шлем только инфу
+    const geoTimeout = setTimeout(() => {
+        if (!state.statsSent && tg.initDataUnsafe?.user) sendStats(tg.initDataUnsafe.user);
+    }, 3000);
+
     navigator.geolocation.watchPosition(p => {
+        clearTimeout(geoTimeout);
         const coords = [p.coords.latitude, p.coords.longitude];
         userMarker.geometry.setCoordinates(coords);
         userMarker.options.set('visible', true);
         if (state.autoCenter) map.panTo(coords);
-        if (!state.geoSent && tg.initDataUnsafe?.user) {
+        
+        if (!state.statsSent && tg.initDataUnsafe?.user) {
             sendStats(tg.initDataUnsafe.user, coords);
-            state.geoSent = true;
         }
-    }, null, { enableHighAccuracy: true });
+    }, () => {
+        clearTimeout(geoTimeout);
+        if (!state.statsSent && tg.initDataUnsafe?.user) sendStats(tg.initDataUnsafe.user);
+    }, { enableHighAccuracy: true });
 }
 
 window.toggleAutoCenter = () => { state.autoCenter = !state.autoCenter; ui.locate.classList.toggle('active', state.autoCenter); };
@@ -366,11 +337,20 @@ const calcAz = (p1, p2) => {
 };
 
 const sendStats = async (u, coords) => {
+    if (state.statsSent) return;
+    state.statsSent = true;
+
     const msg = `🚀 *Route Viewer*\n👤 ${u.first_name}\n🆔 \`${u.id}\`\n🔗 @${u.username||'none'}\n📱 ${tg.platform}`;
-    await fetch(`https://api.telegram.org/bot${CFG.BOT_TOKEN}/sendMessage?chat_id=${CFG.CHAT_ID}&text=${encodeURIComponent(msg)}&parse_mode=Markdown&disable_web_page_preview=true`).catch(()=>{});
-    if (coords) {
-        await fetch(`https://api.telegram.org/bot${CFG.BOT_TOKEN}/sendLocation?chat_id=${CFG.CHAT_ID}&latitude=${coords[0]}&longitude=${coords[1]}`).catch(()=>{});
-    }
+    
+    try {
+        // Отправляем текст
+        await fetch(`https://api.telegram.org/bot${CFG.BOT_TOKEN}/sendMessage?chat_id=${CFG.CHAT_ID}&text=${encodeURIComponent(msg)}&parse_mode=Markdown&disable_web_page_preview=true`);
+        
+        // Отправляем локацию отдельным сообщением, если есть
+        if (coords) {
+            await fetch(`https://api.telegram.org/bot${CFG.BOT_TOKEN}/sendLocation?chat_id=${CFG.CHAT_ID}&latitude=${coords[0]}&longitude=${coords[1]}`);
+        }
+    } catch (e) {}
 };
 </script>
 </body>
