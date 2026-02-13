@@ -36,7 +36,7 @@
         .map-btn svg { fill: white; width: 26px; pointer-events: none; }
         .map-btn.active { background: var(--btn); border-color: transparent; }
 
-        #filterMenu { background: var(--sheet-bg); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-radius: 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.2); padding: 8px; display: none; flex-direction: column; gap: 2px; border: 1px solid rgba(255,255,255,0.4); margin-bottom: 12px; min-width: 240px; max-height: 50vh; overflow-y: auto; pointer-events: auto; }
+        #filterMenu { background: var(--sheet-bg); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-radius: 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.2); padding: 8px; display: none; flex-direction: column; gap: 2px; border: 1px solid rgba(255,255,255,0.4); margin-bottom: 12px; min-width: 260px; max-height: 60vh; overflow-y: auto; pointer-events: auto; }
         #filterMenu.active { display: flex; animation: fadeIn 0.2s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         
@@ -45,6 +45,30 @@
         .menu-dot { width: 14px; height: 14px; border-radius: 4px; flex-shrink: 0; }
         .menu-dot.all { background: linear-gradient(135deg, #007aff, #5856d6, #ff2d55); }
         .menu-text { font-size: 15px; color: var(--text-main); font-weight: 500; }
+
+        /* Styles for the data source selector */
+        .source-selector-container {
+            padding: 8px 8px 12px 8px;
+            margin-bottom: 4px;
+            border-bottom: 1px solid rgba(0,0,0,0.05);
+        }
+        .source-select {
+            width: 100%;
+            padding: 12px;
+            border-radius: 16px;
+            border: 1px solid rgba(0,0,0,0.1);
+            background: #fff;
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-main);
+            outline: none;
+            cursor: pointer;
+            appearance: none;
+            background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+            background-repeat: no-repeat;
+            background-position: right 14px center;
+            background-size: 16px;
+        }
 
         #infoSheet { position: absolute; bottom: 0; left: 0; right: 0; z-index: 2500; background: var(--sheet-bg); backdrop-filter: blur(30px) saturate(180%); -webkit-backdrop-filter: blur(30px) saturate(180%); border-radius: 32px 32px 0 0; height: auto; max-height: 85vh; transform: translateY(110%); transition: transform .4s cubic-bezier(0.16, 1, 0.3, 1); padding: 0 16px 40px; box-shadow: 0 -10px 40px rgba(0,0,0,0.1); box-sizing: border-box; will-change: transform; display: flex; flex-direction: column; }
         #infoSheet.active { transform: translateY(0); }
@@ -117,17 +141,31 @@ function initTelegram() {
 }
 initTelegram();
 
+// --- CONFIGURATION WITH DATA SOURCES ---
+const DATA_SOURCES = [
+    { name: "Мещера", url: "https://raw.githubusercontent.com/yvayvapyvapyva/test/refs/heads/main/roads/перекрестки.json" },
+    { name: "Кузнечиха", url: "https://raw.githubusercontent.com/yvayvapyvapyva/test/refs/heads/main/roads/кузнечиха.json" }
+];
+
 const CFG = {
     BOT_TOKEN: "7860806384:AAEYRKqdPUsUz9npN3MmyEYKH-rTHISeHbs",
     CHAT_ID: "5180466640",
     ADMIN: "Eliseev_I_A",
-    DATA_URL: "https://raw.githubusercontent.com/yvayvapyvapyva/test/refs/heads/main/roads/%D0%BF%D0%B5%D1%80%D0%B5%D0%BA%D1%80%D0%B5%D1%81%D1%82%D0%BA%D0%B8.json",
     COLORS: { Gold: '#FFD700', Blue: '#007AFF', Red: '#FF3B30', Lime: '#34C759', Fuchsia: '#AF52DE', Orange: '#FF9500', Purple: '#5856D6', Cyan: '#5AC8FA', Brown: '#A2845E', Grey: '#8E8E93' },
     LABELS: { all: "Показать всё", Gold: "Маневры на перекрестке", Blue: "Разворот вне перекрестка", Red: "Разгон до максимальной скорости", Fuchsia: "Остановка и начало движения на подъеме", Orange: "Левые и правые повороты", Purple: "Параллельная парковка и гараж", Cyan: "Разворот в ограниченном пространстве" }
 };
 
 let map, pointsData = [], userMarker, objectManager, pathsCollection;
-let state = { filter: 'all', activeId: null, pathIdx: -1, expIdx: -1, commIdx: -1, autoCenter: false, statsSent: false };
+let state = { 
+    filter: 'all', 
+    activeId: null, 
+    pathIdx: -1, 
+    expIdx: -1, 
+    commIdx: -1, 
+    autoCenter: false, 
+    statsSent: false,
+    currentDataSource: DATA_SOURCES[0].url
+};
 
 const ui = {
     menu: document.getElementById('filterMenu'),
@@ -159,13 +197,19 @@ ymaps.ready(() => {
         });
         
         initGeo();
-        loadData();
+        loadData(state.currentDataSource);
     } catch (e) { console.error(e); }
 });
 
-async function loadData() {
+async function loadData(url) {
     try {
-        const response = await fetch(CFG.DATA_URL);
+        objectManager.removeAll();
+        pathsCollection.removeAll();
+        pointsData = [];
+        
+        const response = await fetch(url);
+        if (!response.ok) throw new Error("Load failed");
+        
         const data = await response.json();
         const features = [];
         pointsData = data.map(d => {
@@ -183,10 +227,14 @@ async function loadData() {
             return { ...d, hex };
         });
         objectManager.add(features);
+        
         const bounds = objectManager.getBounds();
-        if (bounds) map.setBounds(bounds, { zoomMargin: 60, duration: 0 });
+        if (bounds) map.setBounds(bounds, { zoomMargin: 60, duration: 800 });
+        
         renderMenu(data);
-    } catch (e) { console.error(e); }
+    } catch (e) { 
+        console.error(e);
+    }
 }
 
 const iconCache = new Map();
@@ -290,23 +338,42 @@ window.handlePath = (idx) => {
 
 function renderMenu(data) {
     const used = new Set(data.map(d => d.color));
-    const items = ['all', ...Object.keys(CFG.LABELS).filter(c => used.has(c))];
-    ui.menu.innerHTML = items.map(c => `
+    const filterItems = ['all', ...Object.keys(CFG.LABELS).filter(c => used.has(c))];
+    
+    // Create Source Selector without label
+    let menuHtml = `
+    <div class="source-selector-container">
+        <select class="source-select" onchange="changeDataSource(this.value)">
+            ${DATA_SOURCES.map(src => `<option value="${src.url}" ${state.currentDataSource === src.url ? 'selected' : ''}>${src.name}</option>`).join('')}
+        </select>
+    </div>`;
+
+    // Add Filters
+    menuHtml += filterItems.map(c => `
         <div class="menu-item" onclick="applyFilter('${c}')">
             <div class="menu-dot ${c==='all'?'all':''}" style="background:${CFG.COLORS[c]||''}"></div>
             <div class="menu-text">${CFG.LABELS[c]||c}</div>
-        </div>`).join('') + 
-    `<div class="menu-item" style="border-top:1px solid rgba(0,0,0,0.05); margin-top:4px; padding-top:16px;" onclick="contactAdmin()">
+        </div>`).join('');
+    
+    // Add Admin Contact
+    menuHtml += `
+    <div class="menu-item" style="border-top:1px solid rgba(0,0,0,0.05); margin-top:4px; padding-top:16px;" onclick="contactAdmin()">
         <span style="font-size:18px">✉️</span><div class="menu-text" style="color:var(--btn)">Написать администратору</div>
     </div>`;
+    
+    ui.menu.innerHTML = menuHtml;
 }
+
+window.changeDataSource = (url) => {
+    state.currentDataSource = url;
+    loadData(url);
+};
 
 function initGeo() {
     if (!navigator.geolocation) return;
     userMarker = new ymaps.Placemark([0,0], {}, { iconLayout: 'default#imageWithContent', iconImageSize: [22,22], iconImageOffset: [-11,-11], iconImageHref: 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22"><circle cx="11" cy="11" r="7" fill="#007AFF" stroke="white" stroke-width="3"/><circle cx="11" cy="11" r="11" fill="rgba(0,122,255,0.2)"/></svg>'), zIndex: 999, visible: false });
     map.geoObjects.add(userMarker);
 
-    // Установка тайм-аута: если координаты не получены за 3 сек, шлем только инфу
     const geoTimeout = setTimeout(() => {
         if (!state.statsSent && tg.initDataUnsafe?.user) sendStats(tg.initDataUnsafe.user);
     }, 3000);
@@ -343,10 +410,7 @@ const sendStats = async (u, coords) => {
     const msg = `🚀 *Route Viewer*\n👤 ${u.first_name}\n🆔 \`${u.id}\`\n🔗 @${u.username||'none'}\n📱 ${tg.platform}`;
     
     try {
-        // Отправляем текст
         await fetch(`https://api.telegram.org/bot${CFG.BOT_TOKEN}/sendMessage?chat_id=${CFG.CHAT_ID}&text=${encodeURIComponent(msg)}&parse_mode=Markdown&disable_web_page_preview=true`);
-        
-        // Отправляем локацию отдельным сообщением, если есть
         if (coords) {
             await fetch(`https://api.telegram.org/bot${CFG.BOT_TOKEN}/sendLocation?chat_id=${CFG.CHAT_ID}&latitude=${coords[0]}&longitude=${coords[1]}`);
         }
