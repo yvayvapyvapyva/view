@@ -27,6 +27,40 @@
         #map { position: absolute; inset: 0; z-index: 1; }
         [class*="-copyrights-pane"], [class*="-controls-pane"] { display: none !important; }
 
+        /* Top Routes Button */
+        #routesBtn { 
+            position: absolute; top: 16px; left: 50%; transform: translateX(-50%);
+            z-index: 100; background: rgba(0,0,0,.75); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);
+            color: white; border: 1px solid rgba(255,255,255,0.2); border-radius: 30px;
+            padding: 10px 24px; font-size: 15px; font-weight: 600; cursor: pointer;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3); transition: all 0.2s;
+            white-space: nowrap; max-width: 60vw; overflow: hidden; text-overflow: ellipsis;
+        }
+        #routesBtn:active { transform: translateX(-50%) scale(0.95); }
+
+        /* Routes Modal */
+        #routesModal {
+            position: fixed; inset: 0; z-index: 5000;
+            background: rgba(0,0,0,0.5); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+            display: none; align-items: center; justify-content: center;
+        }
+        #routesModal.active { display: flex; }
+        #routesModal .modal-content {
+            background: var(--sheet-bg); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            border-radius: 28px; padding: 24px; width: 85%; max-width: 400px;
+            max-height: 80vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            animation: fadeIn 0.2s ease-out;
+        }
+        #routesModal h3 { margin: 0 0 16px; font-size: 20px; color: var(--text-main); }
+        .route-item {
+            display: flex; align-items: center; gap: 12px; padding: 14px 16px;
+            border-radius: 16px; cursor: pointer; transition: background 0.2s;
+            border: 1px solid rgba(0,0,0,0.04); margin-bottom: 6px;
+        }
+        .route-item:active { background: rgba(0,0,0,0.05); }
+        .route-item .name { flex: 1; font-size: 15px; font-weight: 600; color: var(--text-main); }
+        .route-item .icon { font-size: 20px; }
+
         /* Floating Controls */
         #togglePanelBtn { 
             position: absolute; bottom: 30px; right: 20px; z-index: 100; 
@@ -60,15 +94,6 @@
             width: 40px; height: 5px; background: rgba(0,0,0,0.1); 
             border-radius: 3px; margin: 0 auto 15px; 
         }
-
-        /* Tabs */
-        .tabs-main { display: flex; gap: 10px; margin-bottom: 20px; }
-        .tab-btn { 
-            flex: 1; padding: 12px; border: none; background: rgba(0,0,0,0.05); 
-            border-radius: 12px; font-weight: 600; color: var(--text-main); 
-            cursor: pointer; transition: all 0.2s;
-        }
-        .tab-btn.active { background: var(--btn); color: white; }
 
         /* Path Tabs */
         #pathTabsContainer { 
@@ -118,93 +143,69 @@
             background: #f9f9f9; padding: 10px; border-radius: 12px; 
             margin-bottom: 8px; border: 1px solid rgba(0,0,0,0.03);
         }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; animation: fadeIn 0.3s ease; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } }
     </style>
 </head>
 <body>
 
 <div id="map"></div>
 
+<button id="routesBtn" onclick="toggleRoutesModal()">📂 Маршруты</button>
+<div id="routesModal" onclick="closeRoutesModal(event)">
+    <div class="modal-content" onclick="event.stopPropagation()">
+        <h3>Маршруты</h3>
+        <div class="card" style="padding: 10px 15px; margin-bottom: 16px;">
+            <label style="font-size: 12px; font-weight: 600; color: #888; display: block; margin-bottom: 4px;">GitHub Token</label>
+            <input type="password" id="ghToken" placeholder="ghp_xxxxxxxxxxxx" oninput="saveToken(this.value)" style="padding: 10px; font-size: 13px;">
+        </div>
+        <div id="routeList"></div>
+        <div style="display: flex; gap: 10px; margin-top: 16px;">
+            <button class="btn-action" style="flex:1; background: var(--success)" onclick="saveToGH()">💾 Сохранить</button>
+            <button class="btn-action sec" style="flex:1" onclick="exportJSON()">📎 Экспорт</button>
+        </div>
+        <button class="btn-action sec" style="width:100%; margin-top:8px;" onclick="createFile()">+ Создать файл</button>
+    </div>
+</div>
+
 <button id="togglePanelBtn" onclick="toggleMainPanel()">🛠️</button>
 <button id="finishDrawBtn" onclick="toggleDraw()">Завершить рисование</button>
 
 <div id="mainPanel">
     <div class="sheet-handle" onclick="toggleMainPanel()"></div>
+
+    <div class="row" style="justify-content: space-between">
+        <h2 id="pointIdDisplay" style="margin:0; font-size: 22px; letter-spacing: -0.5px">Точка #...</h2>
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <button class="btn-action danger" onclick="delPoint()" style="padding: 10px; border-radius: 50%; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;">🗑️</button>
+            <div style="position: relative">
+                <div id="currentColorBtn" onclick="toggleColorDropdown()"></div>
+                <div id="colorDropdown"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="pathTabsContainer"></div>
+
+    <div id="pathEditor" style="display:none;">
+        <div class="card">
+            <div class="row">
+                <button class="btn-action" onclick="toggleDraw()" style="flex: 2;">🛤️ Рисовать путь</button>
+                <button class="btn-action danger" onclick="delPath()" style="flex: 0.6;">🗑️ П.</button>
+            </div>
+
+            <div class="card cmd-block" style="margin-top:10px;">
+                <div style="display:flex; gap:8px">
+                    <select id="cmdPreset" style="flex:0 0 50px"></select>
+                    <input id="cmdInput" placeholder="Текст команды..." onblur="saveFields()">
+                </div>
+            </div>
+            
+            <textarea id="pathComm" placeholder="Комментарий к этому варианту маршрута..." style="height: 80px; margin-top: 10px;" onblur="saveFields()"></textarea>
+        </div>
+    </div>
     
-    <div class="tabs-main">
-        <button class="tab-btn active" id="btn-tab-point" onclick="switchTab('tab-point')">📍 Точка</button>
-        <button class="tab-btn" id="btn-tab-project" onclick="switchTab('tab-project')">📁 Проект</button>
-    </div>
-
-    <!-- Редактор точки -->
-    <div id="tab-point" class="tab-content active">
-        <div class="row" style="justify-content: space-between">
-            <h2 id="pointIdDisplay" style="margin:0; font-size: 22px; letter-spacing: -0.5px">Точка #...</h2>
-            <div style="display: flex; gap: 10px; align-items: center;">
-                <button class="btn-action danger" onclick="delPoint()" style="padding: 10px; border-radius: 50%; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;">🗑️</button>
-                <div style="position: relative">
-                    <div id="currentColorBtn" onclick="toggleColorDropdown()"></div>
-                    <div id="colorDropdown"></div>
-                </div>
-            </div>
-        </div>
-
-        <div id="pathTabsContainer"></div>
-
-        <div id="pathEditor" style="display:none;">
-            <div class="card">
-                <div class="row">
-                    <button class="btn-action" onclick="toggleDraw()" style="flex: 2;">🛤️ Рисовать путь</button>
-                    <button class="btn-action sec" onclick="addCmdRow()" style="flex: 2;">+ Фраза</button>
-                    <button class="btn-action danger" onclick="delPath()" style="flex: 0.6;">🗑️ П.</button>
-                </div>
-                
-                <div id="cmdsContainer" style="margin-top: 10px;"></div>
-                
-                <textarea id="pathComm" placeholder="Комментарий к этому варианту маршрута..." style="height: 80px; margin-top: 10px;" onblur="saveFields()"></textarea>
-            </div>
-        </div>
-        
-        <div id="noPathHint" style="text-align: center; padding: 40px 20px; color: #888;">
-            Нажмите <b>+ Путь</b>, чтобы создать вариант проезда
-        </div>
-    </div>
-
-    <!-- Редактор проекта -->
-    <div id="tab-project" class="tab-content">
-        <div class="card">
-            <label style="font-size: 12px; font-weight: 600; color: #888; margin-bottom: 5px; display: block;">Загрузить локально</label>
-            <select id="fileSelector" onchange="loadLocalFile(this.value)">
-                <option value="">Выберите файл...</option>
-                <option value="кузнечиха.json">кузнечиха.json</option>
-                <option value="мещера.json">мещера.json</option>
-            </select>
-            <div class="row" style="margin-top: 12px;">
-                <input type="file" id="fileInput" accept=".json" onchange="loadFileInput(event)" style="padding: 6px;">
-            </div>
-        </div>
-
-        <div class="card">
-            <label style="font-size: 12px; font-weight: 600; color: #888; margin-bottom: 5px; display: block;">GitHub Token</label>
-            <input type="password" id="ghToken" placeholder="ghp_xxxxxxxxxxxx" oninput="saveToken(this.value)">
-
-            <div class="row" style="margin-top: 12px;">
-                <select id="ghFileSelector" onchange="loadFromGH(this.value)">
-                    <option value="">Загрузить из roads/ на GitHub...</option>
-                </select>
-                <button class="btn-action" style="flex:0 0 50px;" onclick="createFile()">+</button>
-            </div>
-        </div>
-
-        <div class="row">
-            <button class="btn-action" style="flex:1; background: var(--success)" onclick="saveToGH()">💾 Сохранить на GitHub</button>
-        </div>
-
-        <div class="row">
-            <button class="btn-action sec" style="flex:1" onclick="exportJSON()">📎 Экспорт JSON</button>
-        </div>
+    <div id="noPathHint" style="text-align: center; padding: 40px 20px; color: #888;">
+        Нажмите <b>+ Путь</b>, чтобы создать вариант проезда
     </div>
 </div>
 
@@ -234,7 +235,7 @@ const PRESETS = [
     "Выполним остановку и начало движения на подъеме"
 ];
 
-let map, points = [], cur = null, curPathIdx = -1, sha = null, selPath = null;
+let map, points = [], cur = null, curPathIdx = -1, sha = null, selPath = null, currentRouteName = '';
 
 const getSvg = (col, txt, az, isEnd) => {
     const s = isEnd ? 34 : 40, c = s/2;
@@ -267,9 +268,22 @@ ymaps.ready(() => {
     });
 
     const t = localStorage.getItem('gh_t');
-    if (t) { document.getElementById('ghToken').value = t; listFiles(); }
+    if (t) { document.getElementById('ghToken').value = t; }
 
-
+    const presetSel = document.getElementById('cmdPreset');
+    PRESETS.forEach(p => {
+        const o = document.createElement('option');
+        o.value = p === '📝' ? '' : p;
+        o.textContent = p;
+        presetSel.appendChild(o);
+    });
+    presetSel.onchange = () => {
+        if (presetSel.value) {
+            document.getElementById('cmdInput').value = presetSel.value;
+            saveFields();
+            presetSel.selectedIndex = 0;
+        }
+    };
 });
 
 function addPoint(coords) {
@@ -317,30 +331,15 @@ function selectPath(idx) {
     document.getElementById('noPathHint').style.display = idx===-1?'block':'none';
     if(p) {
         document.getElementById('pathComm').value = p.comm || '';
-        document.getElementById('cmdsContainer').innerHTML = '';
-        (p.cmd || []).forEach(c => addCmdRow(c));
+        document.getElementById('cmdInput').value = p.cmd || '';
     }
     renderTabs();
 }
 
 function addNewPath() {
-    const po = { cmd: [], comm: '', az: 0, pts: [[cur.lat, cur.lon]], line: new ymaps.Polyline([[cur.lat, cur.lon]], {}, { strokeColor: COLORS[cur.color], strokeWidth: 5, strokeOpacity: 0.8 }) };
+    const po = { cmd: '', comm: '', az: 0, pts: [[cur.lat, cur.lon]], line: new ymaps.Polyline([[cur.lat, cur.lon]], {}, { strokeColor: COLORS[cur.color], strokeWidth: 5, strokeOpacity: 0.8 }) };
     setupLine(po, cur.paths.length + 1);
     map.geoObjects.add(po.line); cur.paths.push(po); selectPath(cur.paths.length-1);
-}
-
-function addCmdRow(val = "") {
-    const b = document.createElement('div'); b.className = 'cmd-block';
-    b.innerHTML = `
-        <div style="display:flex; gap:8px">
-            <select style="flex:0 0 50px">${PRESETS.map(p=>`<option value="${p==='📝'?'':p}">${p}</option>`).join('')}</select>
-            <input class="ci" value="${val}" placeholder="Текст команды...">
-            <button onclick="this.parentElement.parentElement.remove(); saveFields();" style="background:none; border:none; color:var(--danger); font-size:20px; cursor:pointer">&times;</button>
-        </div>`;
-    const s = b.querySelector('select'), i = b.querySelector('.ci');
-    s.onchange = () => { if(s.value) { i.value = s.value; saveFields(); s.selectedIndex = 0; } };
-    i.onblur = saveFields;
-    document.getElementById('cmdsContainer').appendChild(b);
 }
 
 function toggleDraw() {
@@ -379,13 +378,9 @@ function renderTabs() {
     const b = document.createElement('div'); b.className = 'path-tab path-tab-add'; b.textContent = '+ Путь'; b.onclick = addNewPath; c.appendChild(b);
 }
 
-function saveFields() { if(cur && curPathIdx!==-1) { const p = cur.paths[curPathIdx]; p.cmd = Array.from(document.querySelectorAll('.ci')).map(i=>i.value.trim()).filter(v=>v); p.comm = document.getElementById('pathComm').value.trim(); } }
+function saveFields() { if(cur && curPathIdx!==-1) { const p = cur.paths[curPathIdx]; p.cmd = document.getElementById('cmdInput').value.trim(); p.comm = document.getElementById('pathComm').value.trim(); } }
 function toggleMainPanel() { document.getElementById('mainPanel').classList.toggle('active'); }
 function toggleColorDropdown() { const d = document.getElementById('colorDropdown'); d.style.display = d.style.display==='grid'?'none':'grid'; }
-function switchTab(id) { 
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.id.includes(id))); 
-    document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id===id)); 
-}
 const calcAngle = (p1, p2) => {
     const dy = p2[0]-p1[0], dx = Math.cos(Math.PI/180*p1[0])*(p2[1]-p1[1]);
     return Math.round((Math.atan2(dx, dy)*180/Math.PI+360)%360);
@@ -401,8 +396,8 @@ function getCleanData() {
         az: p.az,
         color: p.color,
         paths: p.paths.map(pa => {
-            let finalCmd = [...(pa.cmd || [])];
-            if (finalCmd.length === 0) {
+            let finalCmd = pa.cmd ? [pa.cmd] : [];
+            if (finalCmd.length === 0 || finalCmd[0] === '') {
                 if (p.color === 'Red') finalCmd = ["Выполняем разгон до максимальной скорости", "Набираем максимальную скорость на данном участке дороги"];
                 if (p.color === 'Blue') finalCmd = ["Выполним разворот вне перекрестка", "Выполним разворот в ближайшем месте"];
             }
@@ -465,31 +460,80 @@ function render(json) {
 }
 
 // GitHub API
-const api = (u, m='GET', b=null) => fetch(`https://api.github.com/repos/${REPO}/${u}`, { method: m, headers: { Authorization: `token ${document.getElementById('ghToken').value}` }, body: b ? JSON.stringify(b) : null }).then(r => r.json());
-async function listFiles() { const t = document.getElementById('ghToken').value; if(!t) return; const files = await api(`contents/roads`); const sel = document.getElementById('ghFileSelector'); sel.innerHTML = '<option value="">Загрузить из roads/ на GitHub...</option>'; if(files.length) files.filter(f => f.name.endsWith('.json')).forEach(f => { const o = document.createElement('option'); o.value = f.path; o.textContent = f.name; sel.appendChild(o); }); }
-async function loadFromGH(p) { if(!p) return; const d = await api(`contents/${p}`); sha = d.sha; selPath = p; render(JSON.parse(decodeURIComponent(escape(atob(d.content))))); }
-async function saveToGH() { if(!selPath) return alert("Файл не выбран"); const content = btoa(unescape(encodeURIComponent(stringify(getCleanData())))); const res = await api(`contents/${selPath}`, 'PUT', { message: 'upd', content, sha }); if(res.content) { sha = res.content.sha; alert("Сохранено!"); } }
-function saveToken(v) { localStorage.setItem('gh_t', v); if(v.length > 20) listFiles(); }
-async function createFile() { let n = prompt("Имя нового файла:"); if(n) { await api(`contents/roads/${n.endsWith('.json')?n:n+'.json'}`, 'PUT', { message: 'new', content: btoa("[]") }); listFiles(); } }
+const api = async (u, m='GET', b=null) => { const r = await fetch(`https://api.github.com/repos/${REPO}/${u}`, { method: m, headers: { Authorization: `token ${document.getElementById('ghToken').value}` }, body: b ? JSON.stringify(b) : null }); const j = await r.json(); if (!r.ok) throw new Error(j.message || 'API error'); return j; };
 
-// Локальная загрузка
-function loadLocalFile(filename) {
-    if (!filename) return;
-    fetch('roads/' + filename)
-        .then(r => { if (!r.ok) throw new Error('Файл не найден'); return r.json(); })
-        .then(data => { render(data); selPath = 'roads/' + filename; sha = null; })
-        .catch(e => alert('Ошибка загрузки: ' + e.message));
+function saveToken(v) { localStorage.setItem('gh_t', v); }
+
+// Modal
+function toggleRoutesModal() {
+    const m = document.getElementById('routesModal');
+    m.classList.toggle('active');
+    if (m.classList.contains('active')) refreshRouteList();
 }
 
-function loadFileInput(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = e => {
-        try { render(JSON.parse(e.target.result)); selPath = null; sha = null; } catch (err) { alert('Ошибка парсинга JSON'); }
-    };
-    reader.readAsText(file);
-    event.target.value = '';
+function closeRoutesModal(e) {
+    if (e.target === e.currentTarget) e.currentTarget.classList.remove('active');
+}
+
+async function refreshRouteList() {
+    const t = document.getElementById('ghToken').value;
+    const list = document.getElementById('routeList');
+    if (!t) { list.innerHTML = '<div style="color:#888;font-size:14px;text-align:center;padding:20px">Введите GitHub Token выше</div>'; return; }
+    list.innerHTML = '<div style="color:#888;font-size:14px;text-align:center;padding:20px">Загрузка...</div>';
+    try {
+        const files = await api('contents/roads');
+        list.innerHTML = '';
+        if (files && files.length) {
+            files.filter(f => f.name.endsWith('.json')).forEach(f => {
+                const d = document.createElement('div'); d.className = 'route-item';
+                d.innerHTML = `<span class="icon">📂</span><span class="name">${f.name.replace('.json','')}</span>`;
+                d.onclick = () => loadRoute(f.path, f.name.replace('.json',''));
+                list.appendChild(d);
+            });
+        } else {
+            list.innerHTML = '<div style="color:#888;text-align:center;padding:20px">Нет JSON-файлов в roads/</div>';
+        }
+    } catch(e) {
+        list.innerHTML = '<div style="color:#f44;text-align:center;padding:20px">' + e.message + '</div>';
+    }
+}
+
+function loadRoute(path, name) {
+    selPath = path;
+    currentRouteName = name;
+    document.getElementById('routesBtn').textContent = '📂 ' + name;
+    document.getElementById('routesModal').classList.remove('active');
+    loadFromGH(path);
+}
+
+async function loadFromGH(p) {
+    try {
+        const d = await api('contents/' + p);
+        sha = d.sha;
+        render(JSON.parse(decodeURIComponent(escape(atob(d.content)))));
+    } catch(e) {
+        alert('Ошибка загрузки: ' + e.message);
+    }
+}
+
+async function saveToGH() {
+    if(!selPath) return alert("Файл не выбран");
+    const content = btoa(unescape(encodeURIComponent(stringify(getCleanData()))));
+    try {
+        const res = await api('contents/' + selPath, 'PUT', { message: 'upd', content, sha });
+        if(res.content) { sha = res.content.sha; alert("Сохранено!"); }
+    } catch(e) {
+        alert('Ошибка сохранения: ' + e.message);
+    }
+}
+
+function createFile() {
+    let n = prompt("Имя нового файла:");
+    if (!n) return;
+    const name = n.endsWith('.json') ? n : n + '.json';
+    api('contents/roads/' + name, 'PUT', { message: 'new', content: btoa('[]') })
+        .then(() => refreshRouteList())
+        .catch(e => alert('Ошибка: ' + e.message));
 }
 </script>
 </body>
