@@ -158,7 +158,6 @@ let state = {
     filter: 'all', 
     activeId: null, 
     pathIdx: -1, 
-    expIdx: -1, 
     commIdx: -1, 
     autoCenter: false, 
     statsSent: false,
@@ -257,7 +256,7 @@ function getIcon(col, txt, az, isEnd, sourceUrl = '') {
 }
 
 window.showPoint = (id) => {
-    state = { ...state, activeId: id, pathIdx: -1, expIdx: -1, commIdx: -1 };
+    state = { ...state, activeId: id, pathIdx: -1, commIdx: -1 };
     ui.fCont.classList.add('hidden-state');
     objectManager.setFilter(obj => obj.id == id);
     const p = pointsData.find(x => x.id == id);
@@ -301,27 +300,25 @@ function renderSheet() {
     if (!p) return;
     ui.content.classList.toggle('has-selection', state.pathIdx !== -1);
     ui.content.innerHTML = p.paths.map((path, i) => {
-        const isSel = state.pathIdx === i, isExp = state.expIdx === i, isComm = state.commIdx === i;
+        const isSel = state.pathIdx === i, isComm = state.commIdx === i;
         if (path.mapObjects) {
             const vis = state.pathIdx === -1 || isSel;
             path.mapObjects.line.options.set('visible', vis);
             path.mapObjects.pmEnd.options.set('visible', vis);
         }
-        const cmds = Array.isArray(path.cmd) ? path.cmd : [];
-        const title = isExp ? `ВАРИАНТЫ КОМАНД` : (cmds[0] || `Маршрут ${i+1}`);
+        const cmd = (Array.isArray(path.cmd) ? path.cmd[0] : '') || `Маршрут ${i+1}`;
         return `
         <div class="cmd-group ${isSel?'active-path':''}">
             <div class="cmd-main-row">
                 <div class="cmd-info" onclick="handlePath(${i})">
                     <div class="cmd-num-circle">${i+1}</div>
-                    <div class="cmd-title">${title}</div>
+                    <div class="cmd-title">${cmd}</div>
                 </div>
                 <div class="action-bar">
                     ${path.comm ? `<div class="icon-btn ${isComm?'active':'has-data'}" onclick="handleUI('commIdx', ${i})"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg></div>` : ''}
-                    ${cmds.length > 1 ? `<div class="icon-btn ${isExp?'active':''}" onclick="handleUI('expIdx', ${i})"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg></div>` : ''}
                 </div>
             </div>
-            ${(isComm || isExp) ? `<div class="nested-content">${isComm ? `<div class="comm-text">${path.comm}</div>` : ''}${isExp ? `<div class="sub-steps">${cmds.map((c, idx) => `<div class="step-item"><div class="step-num">${idx + 1}</div><div style="flex:1">${c}</div></div>`).join('')}</div>` : ''}</div>` : ''}
+            ${isComm ? `<div class="nested-content"><div class="comm-text">${path.comm}</div></div>` : ''}
         </div>`;
     }).join('');
 }
@@ -333,13 +330,12 @@ window.toggleSheetCollapse = () => {
 };
 window.handleUI = (key, val) => {
     state.pathIdx = val;
-    state[key === 'expIdx' ? 'commIdx' : 'expIdx'] = -1;
     state[key] = state[key] === val ? -1 : val;
     renderSheet();
 };
 window.handlePath = (idx) => {
     state.pathIdx = state.pathIdx === idx ? -1 : idx;
-    state.expIdx = state.commIdx = -1;
+    state.commIdx = -1;
     renderSheet();
 };
 
